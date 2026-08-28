@@ -195,11 +195,13 @@ async function hydrateCoverImages() {
 }
 
 async function storageObjectUrl(path) {
-  const normalized = path.split('/').map(encodeURIComponent).join('/');
-  const objectUrl = `${supabase.url}/storage/v1/object/${supabase.originalsBucket}/${normalized}`;
   if (state.mediaUrls.has(path)) return state.mediaUrls.get(path);
-  const response = await fetch(objectUrl, { headers: headers() });
-  if (!response.ok) return '';
+  const normalized = path.split('/').map(encodeURIComponent).join('/');
+  const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.originalsBucket}/${normalized}`, { headers: headers() });
+  if (!response.ok) {
+    state.mediaUrls.set(path, '');
+    return '';
+  }
   const url = URL.createObjectURL(await response.blob());
   state.mediaUrls.set(path, url);
   return url;
