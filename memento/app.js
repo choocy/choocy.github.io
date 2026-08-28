@@ -13,8 +13,14 @@ const supabase = {
   originalsBucket: 'memento-originals',
 };
 
+const params = new URLSearchParams(location.search);
+const inviteParam = (params.get('invite') || '').trim();
+const guestKey = inviteParam ? `memento_guest_${inviteParam}` : '';
+
 const state = {
-  view: 'home',
+  view: inviteParam ? 'join' : 'home',
+  inviteCode: inviteParam,
+  guestName: guestKey ? localStorage.getItem(guestKey) || '' : '',
   sheetOpen: false,
   loading: true,
   error: '',
@@ -26,10 +32,11 @@ const state = {
   viewerItem: null,
 };
 
-function headers() {
+function headers(extra = {}) {
   return {
     apikey: supabase.anonKey,
     Authorization: `Bearer ${supabase.anonKey}`,
+    ...extra,
   };
 }
 
@@ -45,10 +52,27 @@ async function loadMemories() {
   render();
 
   try {
-    const [mementos, invites, media] = await Promise.all([
-      supabaseJson('mementos?select=*&order=created_at.desc'),
-      supabaseJson('invite_codes?select=memento_id,code,invite_url'),
-      supabaseJson('media_items?select=*&order=uploaded_at.desc'),
+    const inviteFilter = state.inviteCode ? `&code=eq.${encodeURIComponent(state.inviteCode)}` : '';
+    const invites = await supabaseJson(`invite_codes?select=memento_id,code,invite_url${inviteFilter}`);
+    const ids = invites.map((invite) => invite.memento_id).filter(Boolean);
+
+    if (state.inviteCode && !ids.length) {
+      state.memories = [];
+      state.selectedId = null;
+      state.error = 'This invite link is not available.';
+      return;
+    }
+
+    const mementoQuery = state.inviteCode
+      ? `mementos?select=*&id=in.(${ids.map(encodeURIComponent).join(',')})&order=created_at.desc`
+      : 'mementos?select=*&order=created_at.desc';
+    const mediaQuery = state.inviteCode
+      ? `media_items?select=*&memento_id=in.(${ids.map(encodeURIComponent).join(',')})&order=uploaded_at.desc`
+      : 'media_items?select=*&order=uploaded_at.desc';
+
+    const [mementos, media] = await Promise.all([
+      supabaseJson(mementoQuery),
+      supabaseJson(mediaQuery),
     ]);
 
     const invitesByMemento = new Map(invites.map((invite) => [invite.memento_id, invite]));
@@ -61,6 +85,7 @@ async function loadMemories() {
 
     state.memories = mementos.map((row) => mapMemory(row, invitesByMemento.get(row.id), mediaByMemento.get(row.id) || []));
     if (!state.selectedId && state.memories.length) state.selectedId = state.memories[0].id;
+    if (state.inviteCode && state.guestName && state.memories.length) state.view = 'detail';
   } catch {
     state.error = 'Could not load Memento data. Please try again later.';
     state.memories = [];
@@ -96,7 +121,7 @@ function mapMemory(row, invite, mediaItems) {
     coverPath: row.cover_thumbnail_path || row.cover_original_path || mediaItems[0]?.thumbnail_path || mediaItems[0]?.original_path || '',
     cover: '',
     code: invite?.code || 'Invite pending',
-    inviteUrl: invite?.invite_url || '',
+    inviteUrl: invite?.invite_url || inviteUrl(invite?.code),
     media: mediaItems.filter((item) => item.original_path).map(mapMediaItem),
     moments: mediaItems.length,
     uploaded: mediaItems.length,
@@ -174,16 +199,20 @@ function formatDateRange(start, end) {
   return `${startText}-${endText}`;
 }
 
+function inviteUrl(code) {
+  return code ? `https://choocy.app/memento/?invite=${encodeURIComponent(code)}` : '';
+}
+
 async function hydrateCoverImages() {
   const mediaPaths = [];
 
   await Promise.all(state.memories.map(async (memory) => {
     if (memory.coverPath && !state.coverUrls.has(memory.id)) {
       const url = await storageObjectUrl(memory.coverPath);
-    if (url) {
-      state.coverUrls.set(memory.id, url);
-      memory.cover = url;
-    }
+      if (url) {
+        state.coverUrls.set(memory.id, url);
+        memory.cover = url;
+      }
     }
     memory.media.forEach((item) => {
       mediaPaths.push(item.path, item.originalPath);
@@ -195,6 +224,7 @@ async function hydrateCoverImages() {
 }
 
 async function storageObjectUrl(path) {
+  if (!path) return '';
   if (state.mediaUrls.has(path)) return state.mediaUrls.get(path);
   const normalized = path.split('/').map(encodeURIComponent).join('/');
   const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.originalsBucket}/${normalized}`, { headers: headers() });
@@ -238,9 +268,10 @@ function setView(next, id) {
 }
 
 function topbar() {
+  if (state.view === 'camera') return '';
   return `
     <header class="topbar">
-      <button class="brand" data-view="home" aria-label="Memento home">Memento</button>
+      <button class="brand" data-view="${state.inviteCode && !state.guestName ? 'join' : 'home'}" aria-label="Memento home">Memento</button>
       <nav>
         <button class="ghost" data-reload>Refresh</button>
       </nav>
@@ -258,6 +289,34 @@ function home() {
       <div class="memory-grid">
         ${state.memories.map(memoryCard).join('')}
       </div>
+    </section>`;
+}
+
+function join() {
+  if (state.loading) return quietState('Opening Invite', 'Checking this Memento invite.');
+  if (state.error) return quietState('Invite unavailable', state.error, true);
+  const memory = currentMemory();
+  if (!memory) return quietState('Invite unavailable', 'This invite could not be found.', true);
+  if (state.guestName) return detail();
+
+  return `
+    <section class="page join-page">
+      <div class="join-cover">
+        ${imageMarkup(memory, 'hero-cover')}
+        <div class="join-overlay">
+          <p>You've been invited to</p>
+          <h1>${escapeHtml(memory.title)}</h1>
+          <span>${escapeHtml(memory.dateRange)}</span>
+        </div>
+      </div>
+      <form class="join-card" data-join-form>
+        <p class="kicker">Guest camera</p>
+        <h2>What should we call you?</h2>
+        <p>Just a name for this Memento. No account needed for this test.</p>
+        <input name="guestName" autocomplete="name" maxlength="40" placeholder="Your name" required>
+        <button class="ink" type="submit">Join Memento</button>
+        <button class="ghost" type="button" data-open-browser>Open in browser</button>
+      </form>
     </section>`;
 }
 
@@ -294,19 +353,6 @@ function emptyState() {
       <h1>Memento</h1>
       <p>No Supabase memories yet. Create one from the iPhone app, then refresh this page.</p>
       <button class="ink" data-reload>Refresh</button>
-    </section>`;
-}
-
-function intro() {
-  return `
-    <section class="page intro">
-      <div>
-        <p class="kicker">A quiet room for shared photos</p>
-        <h1>Make the night easy to remember, without making it loud.</h1>
-        <p>Memento gives your guests a simple camera, a clean invite, and a reveal moment you control.</p>
-        <button class="ink" data-create>Create flow unavailable</button>
-      </div>
-      <img src="./assets/golden-retriever.png" alt="">
     </section>`;
 }
 
@@ -349,7 +395,12 @@ function detail() {
       </div>
       <div class="detail-body">
         ${summary(memory)}
-        <div class="actions detail-actions"><button class="ghost" data-sheet data-id="${memory.id}">Invite</button>${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<label class="ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import></label><button class="ghost" data-view="poster" data-id="${memory.id}">Poster</button></div>
+        <div class="actions detail-actions">
+          <button class="ghost" data-sheet data-id="${memory.id}">Invite</button>
+          ${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}
+          <label class="ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import></label>
+          <button class="ghost" data-view="poster" data-id="${memory.id}">Poster</button>
+        </div>
         ${gallery(memory)}
       </div>
     </section>`;
@@ -407,11 +458,12 @@ function inviteSheet() {
     <div class="modal-backdrop" data-close-sheet>
       <aside class="invite-sheet">
         <button class="close" data-close-sheet>Close</button>
-        <h2>Invite ready</h2>
+        <h2>Hand out the cameras.</h2>
+        <p>Guests scan to join. No app or account needed.</p>
         <div class="qr">QR</div>
         <strong>${escapeHtml(memory.code)}</strong>
         <p>${memory.inviteUrl ? escapeHtml(memory.inviteUrl) : 'Invite link pending'}</p>
-        <div class="sheet-actions"><button data-share>Share link</button><button>Save QR</button><button data-view="poster" data-id="${memory.id}">Invite poster</button><button>Web invite</button></div>
+        <div class="sheet-actions"><button data-share>Share link</button><button>Save QR</button><button data-view="poster" data-id="${memory.id}">Invite poster</button><button data-open-browser>Web invite</button></div>
       </aside>
     </div>`;
 }
@@ -443,7 +495,17 @@ function cameraSupported() {
 
 function render() {
   const app = document.getElementById('app');
-  const page = state.view === 'home' ? home() : state.view === 'detail' ? detail() : state.view === 'camera' ? camera() : poster();
+  const page = state.view === 'join'
+    ? join()
+    : state.view === 'home'
+      ? home()
+      : state.view === 'detail'
+        ? detail()
+        : state.view === 'camera'
+          ? camera()
+          : state.view === 'create'
+            ? create()
+            : poster();
   app.innerHTML = topbar() + page + (state.sheetOpen ? inviteSheet() : '') + viewer();
   bind();
 }
@@ -484,6 +546,23 @@ function bind() {
 
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
   document.querySelector('[data-local-import]')?.addEventListener('change', importLocalMedia);
+
+  document.querySelector('[data-join-form]')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const name = new FormData(event.currentTarget).get('guestName')?.toString().trim();
+    if (!name) return;
+    state.guestName = name;
+    if (guestKey) localStorage.setItem(guestKey, name);
+    state.view = 'detail';
+    render();
+  });
+
+  document.querySelectorAll('[data-open-browser]').forEach((button) => button.addEventListener('click', async () => {
+    const memory = currentMemory();
+    const url = memory?.inviteUrl || location.href;
+    if (navigator.clipboard) await navigator.clipboard.writeText(url).catch(() => {});
+    location.href = url;
+  }));
 
   document.querySelector('[data-share]')?.addEventListener('click', async () => {
     const memory = currentMemory();
@@ -601,7 +680,7 @@ function showLastShot(url) {
 }
 
 function remainingText(count) {
-  return `${count} photo remaining`;
+  return `${count} ${count === 1 ? 'photo' : 'photos'} remaining`;
 }
 
 loadMemories();
