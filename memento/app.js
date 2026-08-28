@@ -13,14 +13,21 @@ const supabase = {
   originalsBucket: 'memento-originals',
 };
 
+const routeParams = new URLSearchParams(location.search);
+const inviteCode = (routeParams.get('invite') || routeParams.get('code') || '').trim();
+
 const state = {
-  view: 'home',
+  view: inviteCode ? 'join' : 'home',
+  inviteCode,
+  guest: loadGuestSession(),
   loading: true,
   error: '',
+  joinError: '',
   memories: [],
   selectedId: null,
   coverUrls: new Map(),
   localCaptures: new Map(),
+  mode: 'photo',
 };
 
 function headers() {
@@ -36,6 +43,20 @@ async function supabaseJson(path) {
   return response.json();
 }
 
+async function supabaseRpc(functionName, body) {
+  const response = await fetch(`${supabase.url}/rest/v1/rpc/${functionName}`, {
+    method: 'POST',
+    headers: {
+      ...headers(),
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`Supabase RPC ${response.status}`);
+  return response.json();
+}
+
 async function loadMemories() {
   state.loading = true;
   state.error = '';
@@ -44,6 +65,7 @@ async function loadMemories() {
   try {
     state.memories = await fetchGuestMementos();
     if (!state.selectedId && state.memories.length) state.selectedId = state.memories[0].id;
+    if (state.inviteCode && state.guest?.mementoId === state.selectedId) state.view = 'detail';
   } catch {
     state.error = 'Could not load Memento data. Please try again later.';
     state.memories = [];
@@ -56,21 +78,24 @@ async function loadMemories() {
 }
 
 async function fetchGuestMementos() {
-  const params = new URLSearchParams(location.search);
-  const invite = params.get('invite') || params.get('code');
+  const invite = state.inviteCode;
   if (!invite) return [];
 
   const inviteRows = await supabaseJson(`invite_codes?select=memento_id&is_active=eq.true&code=eq.${encodeURIComponent(invite)}&limit=1`);
   const mementoId = inviteRows[0]?.memento_id;
   if (!mementoId) return [];
 
-  const rows = await supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`);
-  return rows.map(mapMemory);
+  const [rows, members] = await Promise.all([
+    supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
+    supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}&role=eq.guest`),
+  ]);
+  return rows.map((row) => mapMemory(row, members));
 }
 
-function mapMemory(row) {
+function mapMemory(row, members = []) {
   const start = parseDate(row.start_time);
   const end = parseDate(row.end_time);
+  const revealTime = parseDate(row.reveal_time) || end;
 
   return {
     id: row.id,
@@ -79,6 +104,12 @@ function mapMemory(row) {
     end: formatDateTime(end),
     style: styleName(row.photo_style),
     shots: numberValue(row.shots_per_guest, 0),
+    videos: numberValue(row.videos_per_guest, 0),
+    videoLength: numberValue(row.video_duration_seconds, 0),
+    reveal: revealLabel(row.reveal_mode, revealTime),
+    guestLimit: numberValue(row.guest_limit, 0),
+    joined: members.length,
+    memberNames: members.map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
   };
@@ -109,6 +140,49 @@ function formatDateTime(date) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date);
+}
+
+function revealLabel(mode, revealTime) {
+  if (mode === 'live') return 'Live';
+  return revealTime ? `Unlocks ${formatClock(revealTime)}` : 'Unlocks later';
+}
+
+function formatClock(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function normalizeName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function loadGuestSession() {
+  try {
+    const raw = localStorage.getItem(`memento_guest_${stateKey()}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveGuestSession(guest) {
+  localStorage.setItem(`memento_guest_${stateKey()}`, JSON.stringify(guest));
+  state.guest = guest;
+}
+
+function stateKey() {
+  return inviteCode || 'direct';
+}
+
+function getDeviceId() {
+  const key = 'memento_guest_device_id';
+  const existing = localStorage.getItem(key);
+  if (existing) return existing;
+  const next = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(key, next);
+  return next;
 }
 
 async function hydrateCoverImages() {
@@ -187,6 +261,30 @@ function home() {
     </section>`;
 }
 
+function join() {
+  if (state.loading) return quietState('Opening Memento', 'Checking this event invite.');
+  if (state.error) return quietState('Invite unavailable', state.error, true);
+  const memory = currentMemory();
+  if (!memory) return emptyState();
+  if (state.guest?.mementoId === memory.id) return detail();
+
+  return `
+    <section class="page join-page">
+      <div class="join-cover">
+        ${imageMarkup(memory, 'hero-cover')}
+      </div>
+      <form class="join-card" data-join-form>
+        <p class="kicker">Guest</p>
+        <h1>${escapeHtml(memory.title)}</h1>
+        <p>Starts ${escapeHtml(memory.date)}</p>
+        <p>Ends ${escapeHtml(memory.end)}</p>
+        <label class="field-label">Your name<input name="guest_name" autocomplete="name" maxlength="40" required></label>
+        ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+        <button class="ink" type="submit">Join</button>
+      </form>
+    </section>`;
+}
+
 function memoryCard(memory) {
   return `
     <article class="memory-card cover-card">
@@ -256,18 +354,39 @@ function localCaptureNotice(memory) {
 function camera() {
   const memory = currentMemory();
   if (!memory) return emptyState();
+  const photos = Math.max(memory.shots - (state.localCaptures.get(memory.id) || []).filter((item) => item.type === 'photo').length, 0);
+  const videos = Math.max(memory.videos - (state.localCaptures.get(memory.id) || []).filter((item) => item.type === 'video').length, 0);
+  const currentRemaining = state.mode === 'video' ? videos : photos;
+  const joined = state.guest?.mementoId === memory.id ? Math.max(memory.joined, 1) : memory.joined;
   return `
     <section class="camera">
-      <button class="close light" data-view="detail" data-id="${memory.id}">Close</button>
       <video autoplay playsinline muted></video>
+      <div class="camera-scrim"></div>
       <div class="camera-label">Camera preview</div>
-      <div class="camera-info"><strong>${escapeHtml(memory.title)}</strong><span>${escapeHtml(memory.date)} - ${escapeHtml(memory.end)}</span></div>
-      <div class="last-shot" hidden><img alt=""><span>Saved local</span></div>
-      <div class="flash"></div>
-      <div class="camera-controls">
-        <button data-facing>Flip</button>
-        <button class="shutter" data-shutter aria-label="Take photo"></button>
+      <div class="camera-top">
+        <button class="camera-back" data-view="detail" data-id="${memory.id}" aria-label="Close camera">v</button>
+        <div class="camera-title"><strong>${escapeHtml(memory.title)}</strong><span>${joined} - ${escapeHtml(memory.reveal)}</span></div>
+        <div class="remaining-counter"><strong data-remaining>${currentRemaining}</strong><span>${remainingLabel(currentRemaining, state.mode)}</span></div>
       </div>
+      <div class="capture-mode">
+        <button class="${state.mode === 'photo' ? 'selected' : ''}" data-mode="photo">Photo</button>
+        <button class="${state.mode === 'video' ? 'selected' : ''}" data-mode="video">Video</button>
+      </div>
+      <div class="zoom-strip" data-zoom-strip>
+        <button data-zoom-choice="0.5">0.5</button>
+        <button class="selected" data-zoom-choice="1">1</button>
+        <button data-zoom-choice="2">2</button>
+        <button data-zoom-choice="5">5</button>
+      </div>
+      <div class="camera-bottom">
+        <label class="last-shot import-tile"><img alt=""><span></span><input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label>
+        <button class="shutter" data-shutter aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
+        <div class="tool-stack">
+          <button data-flash aria-label="Flash">Flash</button>
+          <button data-facing aria-label="Switch camera">Flip</button>
+        </div>
+      </div>
+      <div class="flash"></div>
     </section>`;
 }
 
@@ -277,7 +396,7 @@ function cameraSupported() {
 
 function render() {
   const app = document.getElementById('app');
-  const page = state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
+  const page = state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
   app.innerHTML = (state.view === 'camera' ? '' : topbar()) + page;
   bind();
 }
@@ -289,6 +408,53 @@ function bind() {
 
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
   document.querySelectorAll('[data-local-import]').forEach((input) => input.addEventListener('change', importLocalMedia));
+  document.querySelector('[data-join-form]')?.addEventListener('submit', joinMemento);
+  document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
+    state.mode = button.dataset.mode;
+    render();
+    startCamera();
+  }));
+}
+
+async function joinMemento(event) {
+  event.preventDefault();
+  const memory = currentMemory();
+  const name = new FormData(event.currentTarget).get('guest_name')?.toString().trim().replace(/\s+/g, ' ');
+  if (!memory || !name) return;
+
+  state.joinError = '';
+  const normalized = normalizeName(name);
+  if (memory.memberNames.includes(normalized)) {
+    state.joinError = 'This name has already joined. Please use a different name.';
+    render();
+    return;
+  }
+
+  if (memory.guestLimit > 0 && memory.joined >= memory.guestLimit) {
+    state.joinError = 'This Memento is already full.';
+    render();
+    return;
+  }
+
+  try {
+    event.currentTarget.querySelector('button[type="submit"]').disabled = true;
+    const [joined] = await supabaseRpc('join_memento_by_invite', {
+      invite_code: state.inviteCode,
+      guest_display_name: name,
+      guest_device_id: getDeviceId(),
+    });
+    saveGuestSession({
+      memberId: joined.member_id,
+      mementoId: joined.memento_id,
+      name: joined.display_name,
+    });
+    state.selectedId = joined.memento_id;
+    await loadMemories();
+    setView('detail', joined.memento_id);
+  } catch {
+    state.joinError = 'Could not join this Memento. Please try again.';
+    render();
+  }
 }
 
 function importLocalMedia(event) {
@@ -324,10 +490,12 @@ function startCamera() {
   const label = document.querySelector('.camera-label');
   if (!memory || !video || !label) return;
 
-  let photos = Math.max(memory.shots, 0);
+  const existing = state.localCaptures.get(memory.id) || [];
+  let photos = Math.max(memory.shots - existing.filter((item) => item.type === 'photo').length, 0);
+  let videos = Math.max(memory.videos - existing.filter((item) => item.type === 'video').length, 0);
 
   openCameraStream(video, label);
-  label.textContent = remainingText(photos);
+  label.textContent = 'Camera ready';
 
   document.querySelector('[data-facing]')?.addEventListener('click', () => {
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
@@ -335,13 +503,23 @@ function startCamera() {
   });
 
   document.querySelector('[data-shutter]')?.addEventListener('click', (event) => {
+    if (state.mode === 'video') {
+      if (videos <= 0) return;
+      videos = Math.max(0, videos - 1);
+      label.textContent = 'Video saved local';
+      event.currentTarget.disabled = videos === 0;
+      showLastShot('');
+      rememberLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'video', localUrl: '', sync: 'Saved local' });
+      updateRemaining(videos);
+      return;
+    }
     if (photos <= 0) return;
     const localUrl = capturePhoto(video);
     photos = Math.max(0, photos - 1);
-    label.textContent = remainingText(photos);
     event.currentTarget.disabled = photos === 0;
     showLastShot(localUrl);
     rememberLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl, sync: 'Saved local' });
+    updateRemaining(photos);
   });
 }
 
@@ -364,18 +542,16 @@ function stopCamera() {
 function bindZoomIfSupported(stream) {
   const track = stream.getVideoTracks()[0];
   const capabilities = track?.getCapabilities?.();
-  if (!capabilities?.zoom || document.querySelector('[data-zoom]')) return;
-  const controls = document.querySelector('.camera-controls');
-  const input = document.createElement('input');
-  input.type = 'range';
-  input.min = capabilities.zoom.min;
-  input.max = capabilities.zoom.max;
-  input.step = capabilities.zoom.step || 0.1;
-  input.value = capabilities.zoom.min;
-  input.dataset.zoom = 'true';
-  input.ariaLabel = 'Zoom';
-  input.addEventListener('input', () => track.applyConstraints({ advanced: [{ zoom: Number(input.value) }] }).catch(() => {}));
-  controls.prepend(input);
+  document.querySelectorAll('[data-zoom-choice]').forEach((button) => {
+    const zoom = Number(button.dataset.zoomChoice);
+    const supported = capabilities?.zoom && zoom >= capabilities.zoom.min && zoom <= capabilities.zoom.max;
+    button.hidden = !supported;
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-zoom-choice]').forEach((choice) => choice.classList.remove('selected'));
+      button.classList.add('selected');
+      track.applyConstraints({ advanced: [{ zoom }] }).catch(() => {});
+    });
+  });
 }
 
 function capturePhoto(video) {
@@ -390,14 +566,23 @@ function showLastShot(url) {
   const shot = document.querySelector('.last-shot');
   const flash = document.querySelector('.flash');
   if (shot) {
-    shot.hidden = false;
-    shot.querySelector('img').src = url;
+    shot.classList.add('has-capture');
+    const img = shot.querySelector('img');
+    if (img && url) img.src = url;
+    const status = shot.querySelector('span');
+    if (status) status.textContent = 'Saved local';
   }
   flash?.animate([{ opacity: 0 }, { opacity: 0.55 }, { opacity: 0 }], { duration: 240 });
 }
 
-function remainingText(count) {
-  return `${count} photo remaining`;
+function updateRemaining(count) {
+  const node = document.querySelector('[data-remaining]');
+  if (node) node.textContent = count;
+}
+
+function remainingLabel(count, mode) {
+  if (mode === 'video') return count === 1 ? 'video remaining' : 'videos remaining';
+  return count === 1 ? 'photo remaining' : 'photos remaining';
 }
 
 loadMemories();
