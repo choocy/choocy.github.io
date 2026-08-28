@@ -26,6 +26,7 @@ const state = {
   memories: [],
   selectedId: null,
   coverUrls: new Map(),
+  mediaUrls: new Map(),
   localCaptures: new Map(),
   mode: 'photo',
   recording: false,
@@ -119,7 +120,7 @@ async function fetchGuestMementos() {
   const [rows, members, media] = await Promise.all([
     supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
     supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}&role=eq.guest`),
-    supabaseJson(`media_items?select=id,member_id,media_type&memento_id=eq.${encodeURIComponent(mementoId)}`),
+    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at&memento_id=eq.${encodeURIComponent(mementoId)}`),
   ]);
   return rows.map((row) => mapMemory(row, members, media));
 }
@@ -145,9 +146,20 @@ function mapMemory(row, members = [], media = []) {
     joined: members.length,
     uploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
     uploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
+    media: guestMedia.map(mapMediaItem),
     memberNames: members.map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
+  };
+}
+
+function mapMediaItem(row) {
+  return {
+    id: row.id,
+    type: row.media_type === 'video' ? 'video' : 'photo',
+    path: row.thumbnail_path || row.original_path,
+    originalPath: row.original_path,
+    sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
   };
 }
 
@@ -222,6 +234,7 @@ function getDeviceId() {
 }
 
 async function hydrateCoverImages() {
+  const paths = [];
   await Promise.all(state.memories.map(async (memory) => {
     if (memory.coverPath && !state.coverUrls.has(memory.id)) {
       const url = await storageObjectUrl(memory.coverPath);
@@ -230,21 +243,23 @@ async function hydrateCoverImages() {
         memory.cover = url;
       }
     }
+    memory.media.forEach((item) => paths.push(item.path, item.originalPath));
   }));
+  await Promise.all(paths.map((path) => storageObjectUrl(path)));
   render();
 }
 
 async function storageObjectUrl(path) {
   if (!path) return '';
-  if (state.coverUrls.has(path)) return state.coverUrls.get(path);
+  if (state.mediaUrls.has(path)) return state.mediaUrls.get(path);
   const normalized = path.split('/').map(encodeURIComponent).join('/');
   const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.originalsBucket}/${normalized}`, { headers: headers() });
   if (!response.ok) {
-    state.coverUrls.set(path, '');
+    state.mediaUrls.set(path, '');
     return '';
   }
   const url = URL.createObjectURL(await response.blob());
-  state.coverUrls.set(path, url);
+  state.mediaUrls.set(path, url);
   return url;
 }
 
@@ -266,6 +281,10 @@ function imageMarkup(memory, className = '') {
   const filter = filters[memory.style] || filters.Original;
   if (!memory.cover) return `<div class="cover-placeholder ${className}"><span>${escapeHtml(memory.title)}</span></div>`;
   return `<img class="${className}" src="${memory.cover}" alt="" style="filter:${filter}">`;
+}
+
+function mediaUrl(item) {
+  return item.localUrl || state.mediaUrls.get(item.path) || state.mediaUrls.get(item.originalPath) || '';
 }
 
 function setView(next, id) {
@@ -355,13 +374,10 @@ function emptyState() {
 
 function summary(memory) {
   return `
-    <article class="summary">
-      <div>
-        <h2>${escapeHtml(memory.title)}</h2>
-        <p>Starts ${escapeHtml(memory.date)}</p>
-        <p>Ends ${escapeHtml(memory.end)}</p>
-      </div>
-    </article>`;
+    <div class="detail-overlay">
+      <h2>${escapeHtml(memory.title)}</h2>
+      <p>Starts ${escapeHtml(memory.date)}<br>Ends ${escapeHtml(memory.end)}</p>
+    </div>`;
 }
 
 function detail() {
@@ -372,19 +388,28 @@ function detail() {
     <section class="page detail">
       <div class="detail-cover">
         ${imageMarkup(memory, 'hero-cover')}
+        ${summary(memory)}
       </div>
       <div class="detail-body">
-        ${summary(memory)}
         <div class="actions detail-actions">${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<label class="ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label></div>
-        ${localCaptureNotice(memory)}
+        ${guestGallery(memory)}
       </div>
     </section>`;
 }
 
-function localCaptureNotice(memory) {
+function guestGallery(memory) {
   const local = state.localCaptures.get(memory.id) || [];
-  if (!local.length) return '';
-  return `<p class="local-note">${local.length} selected locally. Upload sync is not enabled on web yet.</p>`;
+  const items = [...local, ...memory.media];
+  if (!items.length) return '<section class="guest-gallery empty-gallery"><p>No moments yet.</p></section>';
+  return `<section class="guest-gallery">${items.map(mediaTile).join('')}</section>`;
+}
+
+function mediaTile(item) {
+  const url = mediaUrl(item);
+  const media = item.type === 'video'
+    ? `<video src="${url}" muted playsinline preload="metadata"></video><span class="play">${icon('play')}</span>`
+    : `<img src="${url}" loading="lazy" alt="">`;
+  return `<article class="media-tile">${media}<small>${escapeHtml(item.sync || 'Uploaded')}</small></article>`;
 }
 
 function camera() {
@@ -405,8 +430,8 @@ function camera() {
         <div class="remaining-counter"><strong data-remaining>${currentRemaining}</strong><span data-remaining-label>${remainingLabel(currentRemaining, state.mode)}</span></div>
       </div>
       <div class="capture-mode">
-        <button class="${state.mode === 'photo' ? 'selected' : ''}" data-mode="photo">Photo</button>
-        <button class="${state.mode === 'video' ? 'selected' : ''}" data-mode="video">Video</button>
+        <button class="${state.mode === 'photo' ? 'selected' : ''}" data-mode="photo" type="button">Photo</button>
+        <button class="${state.mode === 'video' ? 'selected' : ''}" data-mode="video" type="button">Video</button>
       </div>
       <div class="zoom-strip" data-zoom-strip>
         <button data-zoom-choice="0.5">0.5</button>
@@ -450,11 +475,28 @@ function cameraSupported() {
   return Boolean(navigator.mediaDevices?.getUserMedia);
 }
 
+function updateCameraMode() {
+  document.querySelectorAll('[data-mode]').forEach((button) => {
+    button.classList.toggle('selected', button.dataset.mode === state.mode);
+  });
+  const memory = currentMemory();
+  if (!memory) return;
+  const count = remainingFor(memory, state.mode);
+  updateRemaining(count, state.mode);
+  const shutter = document.querySelector('[data-shutter]');
+  if (shutter) {
+    shutter.disabled = count === 0;
+    shutter.ariaLabel = state.mode === 'photo' ? 'Take photo' : 'Record video';
+    shutter.classList.toggle('video-ready', state.mode === 'video');
+  }
+}
+
 function render() {
   const app = document.getElementById('app');
   const page = state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
   app.innerHTML = (state.view === 'camera' ? '' : topbar()) + page;
   bind();
+  document.documentElement.classList.toggle('camera-open', state.view === 'camera');
 }
 
 function bind() {
@@ -468,8 +510,7 @@ function bind() {
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
     state.mode = button.dataset.mode;
-    render();
-    startCamera();
+    updateCameraMode();
   }));
 }
 
@@ -531,7 +572,7 @@ async function importLocalMedia(event) {
 function addLocalCapture(memoryId, item) {
   const list = state.localCaptures.get(memoryId) || [];
   state.localCaptures.set(memoryId, [item, ...list]);
-  render();
+  if (state.view !== 'camera') render();
   return item;
 }
 
@@ -545,6 +586,7 @@ function markCapture(memoryId, itemId, sync) {
   const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
   state.localCaptures.set(memoryId, next);
   updateLastShotStatus(sync);
+  if (state.view !== 'camera') render();
 }
 
 let activeStream = null;
@@ -600,7 +642,7 @@ function startCamera() {
 
 function openCameraStream(video, label) {
   stopCamera();
-  navigator.mediaDevices?.getUserMedia({ video: { facingMode }, audio: state.mode === 'video' }).then((stream) => {
+  navigator.mediaDevices?.getUserMedia({ video: { facingMode }, audio: false }).then((stream) => {
     activeStream = stream;
     activeTrack = stream.getVideoTracks()[0] || null;
     video.srcObject = stream;
@@ -654,11 +696,18 @@ function toggleFlash() {
 }
 
 async function capturePhoto(video) {
+  if (!video.videoWidth || !video.videoHeight) {
+    await new Promise((resolve) => {
+      video.onloadedmetadata = resolve;
+      window.setTimeout(resolve, 500);
+    });
+  }
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
   canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (!blob) throw new Error('Could not capture photo');
   return {
     blob,
     localUrl: URL.createObjectURL(blob),
@@ -685,7 +734,7 @@ function startRecordingVideo(memory, onDone) {
     const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
     const localUrl = URL.createObjectURL(blob);
     const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'video', localUrl, sync: 'Syncing' });
-    showLastShot(localUrl, 'Syncing');
+    showLastShot(localUrl, 'Syncing', 'video');
     uploadCapture(memory, item, blob, blob.type).catch(() => markCapture(memory.id, item.id, 'Retry'));
     onDone();
   };
@@ -733,11 +782,11 @@ function videoExtension(contentType) {
   return 'webm';
 }
 
-function showLastShot(url, statusText = 'Saved local') {
+function showLastShot(url, statusText = 'Saved local', type = 'photo') {
   const shot = document.querySelector('.last-shot');
   if (shot) {
     shot.classList.add('has-capture');
-    shot.classList.toggle('video-capture', !url);
+    shot.classList.toggle('video-capture', type === 'video');
     const img = shot.querySelector('img');
     if (img && url) img.src = url;
     const status = shot.querySelector('span');

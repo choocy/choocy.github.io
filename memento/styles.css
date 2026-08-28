@@ -22,7 +22,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--background); color: var(--ink); }
+html.camera-open { touch-action: manipulation; overscroll-behavior: none; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; }
+html.camera-open body { overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 button, input, label { font: inherit; }
 button, label { cursor: pointer; }
 button:disabled { cursor: default; opacity: .38; }
@@ -103,11 +105,21 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .join-card p { margin: 0; }
 
 .detail { display: grid; grid-template-columns: minmax(280px, .65fr) minmax(0, 1fr); gap: 22px; align-items: start; }
-.detail-cover { position: sticky; top: 82px; border-radius: 8px; overflow: hidden; }
+.detail-cover { position: sticky; top: 82px; border-radius: 8px; overflow: hidden; background: #111; }
 .hero-cover { aspect-ratio: 4 / 5; border-radius: 8px; }
+.detail-overlay { position: absolute; left: 14px; right: 14px; top: 14px; display: grid; gap: 7px; padding: 14px; border-radius: 7px; background: rgb(0 0 0 / 55%); color: white; backdrop-filter: blur(16px); }
+.detail-overlay h2 { color: white; }
+.detail-overlay p { margin: 0; color: rgb(255 255 255 / 76%); font-size: 14px; }
 .detail-body { display: grid; gap: 14px; }
 .detail-actions { padding: 0 2px; }
 .local-note { margin: 0; font-size: 13px; color: var(--muted); }
+.guest-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.media-tile { position: relative; min-height: 0; aspect-ratio: 1; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--field); }
+.media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; }
+.media-tile small { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 4px; background: rgb(0 0 0 / 48%); color: white; font-size: 10px; text-align: center; }
+.media-tile .play { position: absolute; inset: 0; display: grid; place-items: center; color: white; }
+.media-tile .play svg { width: 34px; height: 34px; fill: rgb(255 255 255 / 88%); stroke: none; filter: drop-shadow(0 2px 8px rgb(0 0 0 / 60%)); }
+.empty-gallery { min-height: 110px; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .camera { position: fixed; inset: 0; background: #030303; color: white; display: grid; place-items: center; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .camera video { width: 100%; height: 100%; object-fit: cover; }
 .camera-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgb(0 0 0 / 72%), rgb(0 0 0 / 5%) 24%, rgb(0 0 0 / 8%) 58%, rgb(0 0 0 / 76%)); }
@@ -142,6 +154,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .last-shot.has-capture span { opacity: 1; }
 .flash { pointer-events: none; position: absolute; inset: 0; background: white; opacity: 0; }
 .shutter { justify-self: center; width: 88px; height: 88px; padding: 0 !important; border-radius: 999px; background: white !important; border: 6px solid rgb(255 255 255 / 42%) !important; box-shadow: 0 0 0 4px rgb(0 0 0 / 55%), 0 0 0 8px rgb(255 255 255 / 78%); }
+.shutter.video-ready { background: #ff3434 !important; }
 .shutter.recording { background: #ff2d2d !important; border-radius: 22px; box-shadow: 0 0 0 4px rgb(0 0 0 / 55%), 0 0 0 8px rgb(255 255 255 / 78%); }
 .tool-stack { justify-self: end; display: grid; gap: 18px; }
 .tool-stack button { display: grid; place-items: center; width: 58px; height: 58px; border: 1px solid rgb(255 255 255 / 16%); border-radius: 999px; background: rgb(0 0 0 / 26%); color: white; }
