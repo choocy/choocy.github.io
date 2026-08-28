@@ -13,30 +13,20 @@ const supabase = {
   originalsBucket: 'memento-originals',
 };
 
-const params = new URLSearchParams(location.search);
-const inviteParam = (params.get('invite') || '').trim();
-const guestKey = inviteParam ? `memento_guest_${inviteParam}` : '';
-
 const state = {
-  view: inviteParam ? 'join' : 'home',
-  inviteCode: inviteParam,
-  guestName: guestKey ? localStorage.getItem(guestKey) || '' : '',
-  sheetOpen: false,
+  view: 'home',
   loading: true,
   error: '',
   memories: [],
   selectedId: null,
   coverUrls: new Map(),
-  mediaUrls: new Map(),
   localCaptures: new Map(),
-  viewerItem: null,
 };
 
-function headers(extra = {}) {
+function headers() {
   return {
     apikey: supabase.anonKey,
     Authorization: `Bearer ${supabase.anonKey}`,
-    ...extra,
   };
 }
 
@@ -52,40 +42,8 @@ async function loadMemories() {
   render();
 
   try {
-    const inviteFilter = state.inviteCode ? `&code=eq.${encodeURIComponent(state.inviteCode)}` : '';
-    const invites = await supabaseJson(`invite_codes?select=memento_id,code,invite_url${inviteFilter}`);
-    const ids = invites.map((invite) => invite.memento_id).filter(Boolean);
-
-    if (state.inviteCode && !ids.length) {
-      state.memories = [];
-      state.selectedId = null;
-      state.error = 'This invite link is not available.';
-      return;
-    }
-
-    const mementoQuery = state.inviteCode
-      ? `mementos?select=*&id=in.(${ids.map(encodeURIComponent).join(',')})&order=created_at.desc`
-      : 'mementos?select=*&order=created_at.desc';
-    const mediaQuery = state.inviteCode
-      ? `media_items?select=*&memento_id=in.(${ids.map(encodeURIComponent).join(',')})&order=uploaded_at.desc`
-      : 'media_items?select=*&order=uploaded_at.desc';
-
-    const [mementos, media] = await Promise.all([
-      supabaseJson(mementoQuery),
-      supabaseJson(mediaQuery),
-    ]);
-
-    const invitesByMemento = new Map(invites.map((invite) => [invite.memento_id, invite]));
-    const mediaByMemento = media.reduce((map, item) => {
-      const list = map.get(item.memento_id) || [];
-      list.push(item);
-      map.set(item.memento_id, list);
-      return map;
-    }, new Map());
-
-    state.memories = mementos.map((row) => mapMemory(row, invitesByMemento.get(row.id), mediaByMemento.get(row.id) || []));
+    state.memories = await fetchGuestMementos();
     if (!state.selectedId && state.memories.length) state.selectedId = state.memories[0].id;
-    if (state.inviteCode && state.guestName && state.memories.length) state.view = 'detail';
   } catch {
     state.error = 'Could not load Memento data. Please try again later.';
     state.memories = [];
@@ -97,47 +55,32 @@ async function loadMemories() {
   }
 }
 
-function mapMemory(row, invite, mediaItems) {
-  const photoCount = mediaItems.filter((item) => item.media_type === 'photo').length;
-  const videoCount = mediaItems.filter((item) => item.media_type === 'video').length;
+async function fetchGuestMementos() {
+  const params = new URLSearchParams(location.search);
+  const invite = params.get('invite') || params.get('code');
+  if (!invite) return [];
+
+  const inviteRows = await supabaseJson(`invite_codes?select=memento_id&is_active=eq.true&code=eq.${encodeURIComponent(invite)}&limit=1`);
+  const mementoId = inviteRows[0]?.memento_id;
+  if (!mementoId) return [];
+
+  const rows = await supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`);
+  return rows.map(mapMemory);
+}
+
+function mapMemory(row) {
   const start = parseDate(row.start_time);
   const end = parseDate(row.end_time);
-  const revealTime = parseDate(row.reveal_time) || end;
 
   return {
     id: row.id,
     title: row.title || 'Untitled Memento',
-    host: row.host_name || 'Host',
     date: formatDateTime(start),
     end: formatDateTime(end),
-    dateRange: formatDateRange(start, end),
-    reveal: revealLabel(row.reveal_mode, revealTime),
     style: styleName(row.photo_style),
-    guests: numberValue(row.guest_limit, 0),
-    joined: numberValue(row.joined_count, 0),
     shots: numberValue(row.shots_per_guest, 0),
-    videos: numberValue(row.videos_per_guest, 0),
-    videoLength: numberValue(row.video_duration_seconds, 0),
-    coverPath: row.cover_thumbnail_path || row.cover_original_path || mediaItems[0]?.thumbnail_path || mediaItems[0]?.original_path || '',
+    coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
-    code: invite?.code || 'Invite pending',
-    inviteUrl: invite?.invite_url || inviteUrl(invite?.code),
-    media: mediaItems.filter((item) => item.original_path).map(mapMediaItem),
-    moments: mediaItems.length,
-    uploaded: mediaItems.length,
-    photos: photoCount,
-    videoUploads: videoCount,
-    status: statusLabel(row.status),
-  };
-}
-
-function mapMediaItem(row) {
-  return {
-    id: row.id,
-    type: row.media_type === 'video' ? 'video' : 'photo',
-    path: row.thumbnail_path || row.original_path,
-    originalPath: row.original_path,
-    sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
   };
 }
 
@@ -157,19 +100,6 @@ function styleName(value) {
   return match || 'Original';
 }
 
-function statusLabel(value) {
-  if (value === 'waiting_for_reveal') return 'Waiting';
-  if (value === 'revealed') return 'Memory';
-  if (value === 'draft') return 'Draft';
-  if (value === 'archived') return 'Archived';
-  return 'Active';
-}
-
-function revealLabel(mode, revealTime) {
-  if (mode === 'live') return 'Visible live';
-  return revealTime ? `Unlocks ${formatShortDateTime(revealTime)}` : 'Unlocks when ready';
-}
-
 function formatDateTime(date) {
   if (!date) return 'Date not set';
   return new Intl.DateTimeFormat(undefined, {
@@ -181,31 +111,7 @@ function formatDateTime(date) {
   }).format(date);
 }
 
-function formatShortDateTime(date) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-}
-
-function formatDateRange(start, end) {
-  if (!start && !end) return 'Date not set';
-  if (!start) return formatDateTime(end);
-  if (!end) return formatDateTime(start);
-  const startText = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(start);
-  const endText = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(end);
-  return `${startText}-${endText}`;
-}
-
-function inviteUrl(code) {
-  return code ? `https://choocy.app/memento/?invite=${encodeURIComponent(code)}` : '';
-}
-
 async function hydrateCoverImages() {
-  const mediaPaths = [];
-
   await Promise.all(state.memories.map(async (memory) => {
     if (memory.coverPath && !state.coverUrls.has(memory.id)) {
       const url = await storageObjectUrl(memory.coverPath);
@@ -214,26 +120,21 @@ async function hydrateCoverImages() {
         memory.cover = url;
       }
     }
-    memory.media.forEach((item) => {
-      mediaPaths.push(item.path, item.originalPath);
-    });
   }));
-
-  await Promise.all(mediaPaths.map((path) => storageObjectUrl(path)));
   render();
 }
 
 async function storageObjectUrl(path) {
   if (!path) return '';
-  if (state.mediaUrls.has(path)) return state.mediaUrls.get(path);
+  if (state.coverUrls.has(path)) return state.coverUrls.get(path);
   const normalized = path.split('/').map(encodeURIComponent).join('/');
   const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.originalsBucket}/${normalized}`, { headers: headers() });
   if (!response.ok) {
-    state.mediaUrls.set(path, '');
+    state.coverUrls.set(path, '');
     return '';
   }
   const url = URL.createObjectURL(await response.blob());
-  state.mediaUrls.set(path, url);
+  state.coverUrls.set(path, url);
   return url;
 }
 
@@ -261,62 +162,28 @@ function setView(next, id) {
   if (state.view === 'camera' && next !== 'camera') stopCamera();
   state.view = next;
   if (id) state.selectedId = id;
-  state.sheetOpen = false;
-  state.viewerItem = null;
   render();
   if (next === 'camera') startCamera();
 }
 
 function topbar() {
-  if (state.view === 'camera') return '';
   return `
     <header class="topbar">
-      <button class="brand" data-view="${state.inviteCode && !state.guestName ? 'join' : 'home'}" aria-label="Memento home">Memento</button>
-      <nav>
-        <button class="ghost" data-reload>Refresh</button>
-      </nav>
+      <button class="brand" data-view="home" aria-label="Memento home">Memento</button>
     </header>`;
 }
 
 function home() {
-  if (state.loading) return quietState('Loading Mementos', 'Fetching your saved events from Supabase.');
+  if (state.loading) return quietState('Loading Mementos', 'Fetching this event from Supabase.');
   if (state.error) return quietState('Could not load', state.error, true);
   if (!state.memories.length) return emptyState();
 
   return `
     <section class="page grid-page">
-      <div class="title-block"><p>My Memories</p><h1>Memento</h1></div>
+      <div class="title-block"><p>Guest</p><h1>Memento</h1></div>
       <div class="memory-grid">
         ${state.memories.map(memoryCard).join('')}
       </div>
-    </section>`;
-}
-
-function join() {
-  if (state.loading) return quietState('Opening Invite', 'Checking this Memento invite.');
-  if (state.error) return quietState('Invite unavailable', state.error, true);
-  const memory = currentMemory();
-  if (!memory) return quietState('Invite unavailable', 'This invite could not be found.', true);
-  if (state.guestName) return detail();
-
-  return `
-    <section class="page join-page">
-      <div class="join-cover">
-        ${imageMarkup(memory, 'hero-cover')}
-        <div class="join-overlay">
-          <p>You've been invited to</p>
-          <h1>${escapeHtml(memory.title)}</h1>
-          <span>${escapeHtml(memory.dateRange)}</span>
-        </div>
-      </div>
-      <form class="join-card" data-join-form>
-        <p class="kicker">Guest camera</p>
-        <h2>What should we call you?</h2>
-        <p>Just a name for this Memento. No account needed for this test.</p>
-        <input name="guestName" autocomplete="name" maxlength="40" placeholder="Your name" required>
-        <button class="ink" type="submit">Join Memento</button>
-        <button class="ghost" type="button" data-open-browser>Open in browser</button>
-      </form>
     </section>`;
 }
 
@@ -325,13 +192,9 @@ function memoryCard(memory) {
     <article class="memory-card cover-card">
       <button class="image-button" data-view="detail" data-id="${memory.id}">${imageMarkup(memory)}</button>
       <div class="card-overlay">
-        <span class="status">${escapeHtml(memory.status)}</span>
         <h2>${escapeHtml(memory.title)}</h2>
-        <p>${escapeHtml(memory.dateRange)}</p>
-        <div class="stats">
-          <span>${memory.joined} joined</span><span>${Math.max(memory.guests - memory.joined, 0)} spots left</span><span>${memory.moments} moments</span><span>${memory.uploaded} uploaded</span>
-        </div>
-        <div class="actions"><button class="ghost light-ghost" data-sheet data-id="${memory.id}">Invite</button>${cameraSupported() ? `<button class="ink light-ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}</div>
+        <p>Starts ${escapeHtml(memory.date)}<br>Ends ${escapeHtml(memory.end)}</p>
+        <div class="actions">${cameraSupported() ? `<button class="ink light-ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<label class="ghost light-ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label></div>
       </div>
     </article>`;
 }
@@ -349,22 +212,10 @@ function quietState(title, detail, retry = false) {
 function emptyState() {
   return `
     <section class="page quiet-state">
-      <p class="kicker">My Memories</p>
-      <h1>Memento</h1>
-      <p>No Supabase memories yet. Create one from the iPhone app, then refresh this page.</p>
+      <p class="kicker">Memento</p>
+      <h1>Invite needed</h1>
+      <p>Please open Memento from the event invite link.</p>
       <button class="ink" data-reload>Refresh</button>
-    </section>`;
-}
-
-function create() {
-  return `
-    <section class="page wizard">
-      <div class="wizard-panel readonly-panel">
-        <p class="kicker">Read-only preview</p>
-        <h1>Create is not connected yet.</h1>
-        <p>This web page is now reading from Supabase only. Web creation and uploads will be connected after you ask for writes.</p>
-        <button class="ink" data-view="home">Back to Memento</button>
-      </div>
     </section>`;
 }
 
@@ -373,12 +224,8 @@ function summary(memory) {
     <article class="summary">
       <div>
         <h2>${escapeHtml(memory.title)}</h2>
-        <p>Hosted by ${escapeHtml(memory.host)}</p>
-        <p>${escapeHtml(memory.dateRange)}</p>
-        <p>${memory.joined} joined · ${Math.max(memory.guests - memory.joined, 0)} spots left</p>
-        <p>${memory.shots} photos per guest · ${memory.videos} videos per guest</p>
-        <p>${memory.videoLength} sec videos · ${escapeHtml(memory.reveal)}</p>
-        <p>${escapeHtml(memory.style)}</p>
+        <p>Starts ${escapeHtml(memory.date)}</p>
+        <p>Ends ${escapeHtml(memory.end)}</p>
       </div>
     </article>`;
 }
@@ -391,36 +238,19 @@ function detail() {
     <section class="page detail">
       <div class="detail-cover">
         ${imageMarkup(memory, 'hero-cover')}
-        <span class="release-label">${escapeHtml(memory.reveal)}</span>
       </div>
       <div class="detail-body">
         ${summary(memory)}
-        <div class="actions detail-actions">
-          <button class="ghost" data-sheet data-id="${memory.id}">Invite</button>
-          ${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}
-          <label class="ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import></label>
-          <button class="ghost" data-view="poster" data-id="${memory.id}">Poster</button>
-        </div>
-        ${gallery(memory)}
+        <div class="actions detail-actions">${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<label class="ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label></div>
+        ${localCaptureNotice(memory)}
       </div>
     </section>`;
 }
 
-function gallery(memory) {
+function localCaptureNotice(memory) {
   const local = state.localCaptures.get(memory.id) || [];
-  const items = [...local, ...memory.media];
-  if (!items.length) return `<div class="gallery empty-gallery"><p>No uploaded moments yet.</p></div>`;
-  return `<div class="gallery">${items.map(mediaTile).join('')}</div>`;
-}
-
-function mediaTile(item) {
-  const url = item.localUrl || state.mediaUrls.get(item.path) || state.mediaUrls.get(item.originalPath) || '';
-  if (!url) return `<div class="media-tile needs-sync"><span>Needs sync</span></div>`;
-  return `
-    <button class="media-tile" data-viewer="${item.id}">
-      ${item.type === 'video' ? `<video preload="metadata" muted playsinline src="${url}"></video><i></i>` : `<img loading="lazy" src="${url}" alt="">`}
-      <span>${escapeHtml(item.sync || 'Uploaded')}</span>
-    </button>`;
+  if (!local.length) return '';
+  return `<p class="local-note">${local.length} selected locally. Upload sync is not enabled on web yet.</p>`;
 }
 
 function camera() {
@@ -431,7 +261,7 @@ function camera() {
       <button class="close light" data-view="detail" data-id="${memory.id}">Close</button>
       <video autoplay playsinline muted></video>
       <div class="camera-label">Camera preview</div>
-      <div class="camera-info"><strong>${escapeHtml(memory.title)}</strong><span>${memory.joined} joined · ${escapeHtml(memory.reveal)}</span></div>
+      <div class="camera-info"><strong>${escapeHtml(memory.title)}</strong><span>${escapeHtml(memory.date)} - ${escapeHtml(memory.end)}</span></div>
       <div class="last-shot" hidden><img alt=""><span>Saved local</span></div>
       <div class="flash"></div>
       <div class="camera-controls">
@@ -441,72 +271,14 @@ function camera() {
     </section>`;
 }
 
-function poster() {
-  const memory = currentMemory();
-  if (!memory) return emptyState();
-  return `
-    <section class="page poster">
-      <button class="ghost" data-view="detail" data-id="${memory.id}">Back</button>
-      <article><p>You are invited to</p><h1>${escapeHtml(memory.title)}</h1><div class="qr">QR</div><strong>${escapeHtml(memory.code)}</strong><span>${escapeHtml(memory.dateRange)}</span></article>
-    </section>`;
-}
-
-function inviteSheet() {
-  const memory = currentMemory();
-  if (!memory) return '';
-  return `
-    <div class="modal-backdrop" data-close-sheet>
-      <aside class="invite-sheet">
-        <button class="close" data-close-sheet>Close</button>
-        <h2>Hand out the cameras.</h2>
-        <p>Guests scan to join. No app or account needed.</p>
-        <div class="qr">QR</div>
-        <strong>${escapeHtml(memory.code)}</strong>
-        <p>${memory.inviteUrl ? escapeHtml(memory.inviteUrl) : 'Invite link pending'}</p>
-        <div class="sheet-actions"><button data-share>Share link</button><button>Save QR</button><button data-view="poster" data-id="${memory.id}">Invite poster</button><button data-open-browser>Web invite</button></div>
-      </aside>
-    </div>`;
-}
-
-function viewer() {
-  const item = findMediaItem(state.viewerItem);
-  if (!item) return '';
-  const url = item.localUrl || state.mediaUrls.get(item.originalPath) || state.mediaUrls.get(item.path) || '';
-  if (!url) return '';
-  return `
-    <div class="viewer" data-close-viewer>
-      <button class="close light" data-close-viewer>Close</button>
-      ${item.type === 'video' ? `<video controls autoplay playsinline src="${url}"></video>` : `<img src="${url}" alt="">`}
-    </div>`;
-}
-
-function findMediaItem(id) {
-  if (!id) return null;
-  for (const memory of state.memories) {
-    const item = [...(state.localCaptures.get(memory.id) || []), ...memory.media].find((media) => media.id === id);
-    if (item) return item;
-  }
-  return null;
-}
-
 function cameraSupported() {
   return Boolean(navigator.mediaDevices?.getUserMedia);
 }
 
 function render() {
   const app = document.getElementById('app');
-  const page = state.view === 'join'
-    ? join()
-    : state.view === 'home'
-      ? home()
-      : state.view === 'detail'
-        ? detail()
-        : state.view === 'camera'
-          ? camera()
-          : state.view === 'create'
-            ? create()
-            : poster();
-  app.innerHTML = topbar() + page + (state.sheetOpen ? inviteSheet() : '') + viewer();
+  const page = state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
+  app.innerHTML = (state.view === 'camera' ? '' : topbar()) + page;
   bind();
 }
 
@@ -515,67 +287,12 @@ function bind() {
     setView(button.dataset.view, button.dataset.id);
   }));
 
-  document.querySelectorAll('[data-create]').forEach((button) => button.addEventListener('click', () => {
-    setView('create');
-  }));
-
-  document.querySelectorAll('[data-sheet]').forEach((button) => button.addEventListener('click', () => {
-    if (button.dataset.id) state.selectedId = button.dataset.id;
-    state.sheetOpen = true;
-    render();
-  }));
-
-  document.querySelectorAll('[data-close-sheet]').forEach((item) => item.addEventListener('click', (event) => {
-    if (event.target === item) {
-      state.sheetOpen = false;
-      render();
-    }
-  }));
-
-  document.querySelectorAll('[data-close-viewer]').forEach((item) => item.addEventListener('click', (event) => {
-    if (event.target === item) {
-      state.viewerItem = null;
-      render();
-    }
-  }));
-
-  document.querySelectorAll('[data-viewer]').forEach((button) => button.addEventListener('click', () => {
-    state.viewerItem = button.dataset.viewer;
-    render();
-  }));
-
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
-  document.querySelector('[data-local-import]')?.addEventListener('change', importLocalMedia);
-
-  document.querySelector('[data-join-form]')?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const name = new FormData(event.currentTarget).get('guestName')?.toString().trim();
-    if (!name) return;
-    state.guestName = name;
-    if (guestKey) localStorage.setItem(guestKey, name);
-    state.view = 'detail';
-    render();
-  });
-
-  document.querySelectorAll('[data-open-browser]').forEach((button) => button.addEventListener('click', async () => {
-    const memory = currentMemory();
-    const url = memory?.inviteUrl || location.href;
-    if (navigator.clipboard) await navigator.clipboard.writeText(url).catch(() => {});
-    location.href = url;
-  }));
-
-  document.querySelector('[data-share]')?.addEventListener('click', async () => {
-    const memory = currentMemory();
-    const url = memory?.inviteUrl || location.href;
-    if (navigator.share) {
-      navigator.share({ title: memory?.title || 'Memento', text: memory?.code || '', url }).catch(() => {});
-    } else if (navigator.clipboard) {
-      await navigator.clipboard.writeText(url);
-    }
-  });
+  document.querySelectorAll('[data-local-import]').forEach((input) => input.addEventListener('change', importLocalMedia));
 }
 
 function importLocalMedia(event) {
+  if (event.target.dataset.id) state.selectedId = event.target.dataset.id;
   const memory = currentMemory();
   const file = event.target.files?.[0];
   if (!memory || !file) return;
@@ -680,7 +397,7 @@ function showLastShot(url) {
 }
 
 function remainingText(count) {
-  return `${count} ${count === 1 ? 'photo' : 'photos'} remaining`;
+  return `${count} photo remaining`;
 }
 
 loadMemories();
