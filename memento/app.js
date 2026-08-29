@@ -675,6 +675,7 @@ function render() {
   app.innerHTML = (state.view === 'camera' ? '' : topbar()) + page;
   bind();
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
+  document.documentElement.classList.toggle('viewer-open', state.viewer != null);
 }
 
 function bind() {

@@ -23,8 +23,10 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--background); color: var(--ink); }
 html.camera-open { width: 100%; height: 100%; touch-action: manipulation; overscroll-behavior: none; background: #030303; }
+html.viewer-open { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: #050505; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; }
 html.camera-open body { width: 100%; height: 100%; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; background: #030303; }
+html.viewer-open body { width: 100%; height: 100%; overflow: hidden; background: #050505; }
 button, input, label { font: inherit; }
 button, label { cursor: pointer; }
 button:disabled { cursor: default; opacity: .38; }
@@ -166,15 +168,15 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .media-tile .play { position: absolute; inset: 0; display: grid; place-items: center; color: white; }
 .media-tile .play svg { width: 34px; height: 34px; fill: rgb(255 255 255 / 88%); stroke: none; filter: drop-shadow(0 2px 8px rgb(0 0 0 / 60%)); }
 .empty-gallery { min-height: 110px; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-.viewer { position: fixed; inset: 0; z-index: 80; display: grid; grid-template-rows: 1fr auto; background: #050505; color: white; }
+.viewer { position: fixed; inset: 0; z-index: 80; display: grid; grid-template-rows: minmax(0, 1fr) auto; width: 100vw; height: 100vh; height: 100svh; height: 100dvh; overflow: hidden; background: #050505; color: white; }
 .viewer-close { position: fixed; right: 18px; top: max(18px, env(safe-area-inset-top)); z-index: 82; display: grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 12%); color: white; backdrop-filter: blur(16px); }
 .viewer-close svg, .viewer-nav svg, .viewer-tools svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .viewer-nav { position: fixed; top: 50%; z-index: 82; display: grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 10%); color: white; transform: translateY(-50%); backdrop-filter: blur(16px); }
 .viewer-nav:disabled { opacity: .22; }
 .viewer-prev { left: 12px; }
 .viewer-next { right: 12px; }
-.viewer-media { min-height: 0; display: grid; place-items: center; padding: max(66px, env(safe-area-inset-top)) 14px 12px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.viewer-media img, .viewer-media video { width: 100%; height: 100%; max-height: calc(100dvh - 190px); object-fit: contain; }
+.viewer-media { min-height: 0; display: grid; place-items: center; padding: max(66px, env(safe-area-inset-top)) 14px 12px; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.viewer-media img, .viewer-media video { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 .viewer-warm { filter: contrast(1.04) saturate(1.08) sepia(.12) brightness(1.02); }
 .viewer-mono { filter: grayscale(1) contrast(1.08); }
 .viewer-tools { z-index: 81; display: flex; gap: 8px; overflow-x: auto; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); border-top: 1px solid rgb(255 255 255 / 12%); background: rgb(12 12 12 / 88%); backdrop-filter: blur(18px); }
@@ -242,9 +244,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
   .camera-title span { font-size: 12px; }
   .remaining-counter strong { font-size: 34px; }
   .remaining-counter span { width: 56px; font-size: 13px; }
-  .viewer-nav { width: 38px; height: 38px; background: rgb(255 255 255 / 8%); }
-  .viewer-prev { left: 8px; }
-  .viewer-next { right: 8px; }
+  .viewer-nav { display: none; }
   .capture-mode { bottom: 210px; }
   .zoom-strip { bottom: 150px; }
   .camera-bottom { bottom: max(48px, env(safe-area-inset-bottom)); grid-template-columns: 66px 1fr 66px; padding-inline: 24px; }
