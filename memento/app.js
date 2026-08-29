@@ -29,6 +29,7 @@ const state = {
   loading: true,
   error: '',
   joinError: '',
+  guestMenuOpen: false,
   memories: [],
   selectedId: null,
   coverUrls: new Map(),
@@ -325,6 +326,7 @@ function mediaUrl(item) {
 function setView(next, id) {
   if (state.view === 'camera' && next !== 'camera') stopCamera();
   if (next === 'camera') enterImmersiveMode();
+  state.guestMenuOpen = false;
   state.view = next;
   if (id) state.selectedId = id;
   render();
@@ -339,9 +341,11 @@ function enterImmersiveMode() {
 
 function topbar() {
   if (['invite', 'loading'].includes(state.view)) return '';
+  const showMenu = state.guest?.name && ['home', 'detail'].includes(state.view);
   return `
     <header class="topbar">
       <button class="brand" data-view="home" aria-label="Memento home">Memento</button>
+      ${showMenu ? `<button class="guest-menu-button" data-guest-menu aria-label="Guest menu">${icon('menu')}</button>` : ''}
     </header>`;
 }
 
@@ -489,8 +493,19 @@ function detail() {
         <div class="actions detail-actions">${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<label class="ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label></div>
         ${guestGallery(memory)}
       </div>
+      ${guestMenu()}
       ${viewer(memory)}
     </section>`;
+}
+
+function guestMenu() {
+  if (!state.guestMenuOpen) return '';
+  const name = currentParticipantName() || 'Guest';
+  return `
+    <aside class="guest-menu" role="dialog" aria-label="Guest menu">
+      <p>Signed in as</p>
+      <strong>${escapeHtml(name)}</strong>
+    </aside>`;
 }
 
 function guestGallery(memory) {
@@ -598,6 +613,7 @@ function icon(name) {
     camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>',
     edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 9-9-4-4-9 9-2 6 6-2Z"/><path d="m15 6 4 4"/></svg>',
     'arrow-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
+    menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>',
     'flash-off': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/><path d="m2 2 20 20"/></svg>',
     flash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/></svg>',
     flip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg>',
@@ -640,6 +656,10 @@ function bind() {
   document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
     setView(button.dataset.view, button.dataset.id);
   }));
+  document.querySelector('[data-guest-menu]')?.addEventListener('click', () => {
+    state.guestMenuOpen = !state.guestMenuOpen;
+    render();
+  });
 
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
   document.querySelectorAll('[data-local-import]').forEach((input) => input.addEventListener('change', importLocalMedia));
