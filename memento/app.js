@@ -141,7 +141,7 @@ async function fetchGuestMementos() {
   const [rows, members, media] = await Promise.all([
     supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
     supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}&role=eq.guest`),
-    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}`),
+    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=uploaded_at.desc.nullslast`),
   ]);
   return rows.map((row) => mapMemory(row, members, media));
 }
@@ -174,8 +174,10 @@ function mapMemory(row, members = [], media = []) {
     canHostPreview: Boolean(row.host_preview_before_reveal),
     guestLimit: numberValue(row.guest_limit, 0),
     joined: members.length,
-    uploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
-    uploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
+    uploadedPhotos: visibleMedia.filter((item) => item.media_type === 'photo').length,
+    uploadedVideos: visibleMedia.filter((item) => item.media_type === 'video').length,
+    ownUploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
+    ownUploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
     media: visibleMedia.map((item) => mapMediaItem(item, { revealed, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
     memberNames: members.map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
@@ -197,7 +199,7 @@ function mapMediaItem(row, memory = {}) {
     type: row.media_type === 'video' ? 'video' : 'photo',
     path: row.thumbnail_path || '',
     originalPath: row.original_path,
-    locked: !memory.revealed,
+    locked: !memory.revealed && !isCurrentParticipant,
     revealLabel: `Reveals ${memory.revealAtLabel || 'later'}`,
     capturedByName: row.captured_by_name || (isCurrentParticipant ? currentParticipantName() : ''),
     sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
@@ -579,10 +581,11 @@ function guestMenu() {
 function guestGallery(memory) {
   const local = state.localCaptures.get(memory.id) || [];
   const items = [...local, ...memory.media];
+  const momentLabel = `${items.length} ${items.length === 1 ? 'moment' : 'moments'}`;
   const toggle = `
     <div class="gallery-heading">
       <h2>Gallery</h2>
-      <label class="name-toggle">Names <input type="checkbox" data-captured-toggle ${state.showCapturedBy ? 'checked' : ''}></label>
+      <div class="gallery-controls"><span>${escapeHtml(momentLabel)}</span><label class="name-toggle">Names <input type="checkbox" data-captured-toggle ${state.showCapturedBy ? 'checked' : ''}></label></div>
     </div>`;
   if (!items.length) return `${toggle}<section class="guest-gallery empty-gallery"><p>No moments yet.</p></section>`;
   return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index)).join('')}</section>`;
@@ -700,7 +703,7 @@ function camera() {
 
 function remainingFor(memory, type) {
   const local = (state.localCaptures.get(memory.id) || []).filter((item) => item.type === type && item.sync !== 'Uploaded').length;
-  const uploaded = type === 'photo' ? memory.uploadedPhotos : memory.uploadedVideos;
+  const uploaded = type === 'photo' ? memory.ownUploadedPhotos : memory.ownUploadedVideos;
   const limit = type === 'photo' ? memory.shots : memory.videos;
   return Math.max(limit - uploaded - local, 0);
 }
@@ -1395,8 +1398,10 @@ async function uploadCapture(memory, item, blob, contentType) {
   });
   if (item.type === 'photo') {
     memory.uploadedPhotos += 1;
+    memory.ownUploadedPhotos += 1;
   } else {
     memory.uploadedVideos += 1;
+    memory.ownUploadedVideos += 1;
   }
   markCapture(memory.id, item.id, 'Uploaded');
 }
