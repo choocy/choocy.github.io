@@ -164,12 +164,13 @@ function mapMemory(row, members = [], media = []) {
 }
 
 function mapMediaItem(row) {
+  const isCurrentParticipant = state.guest?.memberId && row.member_id === state.guest.memberId;
   return {
     id: row.id,
     type: row.media_type === 'video' ? 'video' : 'photo',
     path: row.thumbnail_path || row.original_path,
     originalPath: row.original_path,
-    capturedByName: row.captured_by_name || '',
+    capturedByName: row.captured_by_name || (isCurrentParticipant ? currentParticipantName() : ''),
     sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
   };
 }
@@ -277,14 +278,24 @@ async function storageObjectUrl(path) {
   if (!path) return '';
   if (state.mediaUrls.has(path)) return state.mediaUrls.get(path);
   const normalized = path.split('/').map(encodeURIComponent).join('/');
-  const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.originalsBucket}/${normalized}`, { headers: headers() });
-  if (!response.ok) {
-    state.mediaUrls.set(path, '');
-    return '';
+  const signed = await fetch(`${supabase.url}/storage/v1/object/sign/${supabase.originalsBucket}/${normalized}`, {
+    method: 'POST',
+    headers: {
+      ...headers(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ expiresIn: 600 }),
+  });
+  if (signed.ok) {
+    const data = await signed.json();
+    const url = data.signedURL?.startsWith('http') ? data.signedURL : `${supabase.url}/storage/v1${data.signedURL}`;
+    state.mediaUrls.set(path, url);
+    return url;
   }
-  const url = URL.createObjectURL(await response.blob());
-  state.mediaUrls.set(path, url);
-  return url;
+
+  const publicUrl = `${supabase.url}/storage/v1/object/public/${supabase.originalsBucket}/${normalized}`;
+  state.mediaUrls.set(path, publicUrl);
+  return publicUrl;
 }
 
 function currentMemory() {
