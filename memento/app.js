@@ -30,6 +30,7 @@ const state = {
   localCaptures: new Map(),
   mode: 'photo',
   recording: false,
+  recordingSecondsLeft: 0,
 };
 
 function headers() {
@@ -512,6 +513,18 @@ function bind() {
     state.mode = button.dataset.mode;
     updateCameraMode();
   }));
+
+  const cameraSurface = document.querySelector('.camera');
+  cameraSurface?.addEventListener('dblclick', (event) => event.preventDefault());
+  cameraSurface?.addEventListener('touchend', preventFastDoubleTap, { passive: false });
+}
+
+let lastTouchEnd = 0;
+
+function preventFastDoubleTap(event) {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 320) event.preventDefault();
+  lastTouchEnd = now;
 }
 
 async function joinMemento(event) {
@@ -630,13 +643,17 @@ function startCamera() {
       return;
     }
     if (photos <= 0) return;
-    const photo = await capturePhoto(video);
-    photos = Math.max(0, photos - 1);
-    event.currentTarget.disabled = photos === 0;
-    const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, sync: 'Syncing' });
-    showLastShot(photo.localUrl, 'Syncing');
-    updateRemaining(photos, state.mode);
-    uploadCapture(memory, item, photo.blob, 'image/jpeg').catch(() => markCapture(memory.id, item.id, 'Retry'));
+    try {
+      const photo = await capturePhoto(video);
+      photos = Math.max(0, photos - 1);
+      event.currentTarget.disabled = photos === 0;
+      const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, sync: 'Syncing' });
+      showLastShot(photo.localUrl, 'Syncing');
+      updateRemaining(photos, state.mode);
+      uploadCapture(memory, item, photo.blob, 'image/jpeg').catch(() => markCapture(memory.id, item.id, 'Retry'));
+    } catch {
+      label.textContent = 'Could not capture photo';
+    }
   });
 }
 
@@ -706,12 +723,27 @@ async function capturePhoto(video) {
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
   canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  const blob = await new Promise((resolve) => {
+    if (canvas.toBlob) {
+      canvas.toBlob(resolve, 'image/jpeg', 0.9);
+    } else {
+      resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9)));
+    }
+  });
   if (!blob) throw new Error('Could not capture photo');
   return {
     blob,
     localUrl: URL.createObjectURL(blob),
   };
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [meta, data] = dataUrl.split(',');
+  const mime = meta.match(/data:(.*?);/)?.[1] || 'image/jpeg';
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: mime });
 }
 
 function startRecordingVideo(memory, onDone) {
@@ -723,13 +755,25 @@ function startRecordingVideo(memory, onDone) {
   const mimeType = supportedVideoMimeType();
   mediaRecorder = new MediaRecorder(activeStream, mimeType ? { mimeType } : undefined);
   state.recording = true;
+  state.recordingSecondsLeft = Math.max(memory.videoLength, 1);
   document.querySelector('.shutter')?.classList.add('recording');
   document.querySelector('.camera-label').textContent = 'Recording';
+  updateRemaining(state.recordingSecondsLeft, 'recording');
+  const timer = window.setInterval(() => {
+    if (!state.recording) {
+      window.clearInterval(timer);
+      return;
+    }
+    state.recordingSecondsLeft = Math.max(0, state.recordingSecondsLeft - 1);
+    updateRemaining(state.recordingSecondsLeft, 'recording');
+    if (state.recordingSecondsLeft === 0) stopRecordingVideo();
+  }, 1000);
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) recordedChunks.push(event.data);
   };
   mediaRecorder.onstop = () => {
     state.recording = false;
+    window.clearInterval(timer);
     document.querySelector('.shutter')?.classList.remove('recording');
     const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
     const localUrl = URL.createObjectURL(blob);
@@ -739,9 +783,6 @@ function startRecordingVideo(memory, onDone) {
     onDone();
   };
   mediaRecorder.start();
-  window.setTimeout(() => {
-    if (state.recording) stopRecordingVideo();
-  }, Math.max(memory.videoLength, 1) * 1000);
 }
 
 function stopRecordingVideo() {
@@ -813,6 +854,7 @@ function updateRemaining(count, mode) {
 }
 
 function remainingLabel(count, mode) {
+  if (mode === 'recording') return count === 1 ? 'sec left' : 'sec left';
   if (mode === 'video') return count === 1 ? 'video remaining' : 'videos remaining';
   return count === 1 ? 'photo remaining' : 'photos remaining';
 }
