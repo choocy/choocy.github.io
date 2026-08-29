@@ -13,6 +13,10 @@ const supabase = {
   originalsBucket: 'memento-originals',
 };
 
+const FEATURES = {
+  albumImport: false,
+};
+
 const routeParams = new URLSearchParams(location.search);
 const routeParts = location.pathname.split('/').map(decodeURIComponent).filter(Boolean);
 const explicitInvitePathIndex = routeParts.findIndex((part) => ['invite', 'join'].includes(part.toLowerCase()));
@@ -448,9 +452,14 @@ function memoryCard(memory) {
       <div class="card-overlay">
         <h2>${escapeHtml(memory.title)}</h2>
         <p>Starts ${escapeHtml(memory.date)}<br>Ends ${escapeHtml(memory.end)}</p>
-        <div class="actions">${cameraSupported() ? `<button class="ink light-ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<button class="ghost light-ghost" data-open-album data-id="${memory.id}" type="button">Album</button><input type="file" accept="image/*,video/*" hidden data-local-import data-album-input data-id="${memory.id}"></div>
+        <div class="actions">${cameraSupported() ? `<button class="ink light-ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory, 'ghost light-ghost')}</div>
       </div>
     </article>`;
+}
+
+function albumAction(memory, buttonClass = 'ghost') {
+  if (!FEATURES.albumImport) return '';
+  return `<button class="${buttonClass}" data-open-album data-id="${memory.id}" type="button">Album</button><input class="album-input" type="file" accept="image/*,video/*" hidden data-local-import data-album-input data-id="${memory.id}">`;
 }
 
 function quietState(title, detail, retry = false) {
@@ -492,7 +501,7 @@ function detail() {
         ${summary(memory)}
       </div>
       <div class="detail-body">
-        <div class="actions detail-actions">${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<button class="ghost" data-open-album data-id="${memory.id}" type="button">Album</button><input class="album-input" type="file" accept="image/*,video/*" hidden data-local-import data-album-input data-id="${memory.id}"></div>
+        <div class="actions detail-actions">${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory)}</div>
         ${state.galleryNotice ? `<p class="gallery-notice">${escapeHtml(state.galleryNotice)}</p>` : ''}
         ${guestGallery(memory)}
       </div>
@@ -589,14 +598,14 @@ function camera() {
         <button data-zoom-choice="5">5</button>
       </div>
       <div class="camera-bottom">
-        <button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>
+        ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : '<div class="last-shot import-tile" aria-hidden="true"><img alt=""><span></span></div>'}
         <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
         <div class="tool-stack">
           <button data-flash aria-label="Flash">${icon('flash-off')}</button>
           <button data-facing aria-label="Switch camera">${icon('flip')}</button>
         </div>
       </div>
-      <input type="file" accept="image/*,video/*" hidden data-local-import data-album-input data-id="${memory.id}">
+      ${FEATURES.albumImport ? `<input type="file" accept="image/*,video/*" hidden data-local-import data-album-input data-id="${memory.id}">` : ''}
       <div class="flash"></div>
     </section>`;
 }
@@ -661,6 +670,7 @@ function bind() {
     setView(button.dataset.view, button.dataset.id);
   }));
   document.querySelectorAll('[data-open-album]').forEach((button) => button.addEventListener('click', () => {
+    if (!FEATURES.albumImport) return;
     if (button.dataset.id) state.selectedId = button.dataset.id;
     state.albumOpenedAt.set(button.dataset.id, Date.now());
     document.querySelector(`[data-album-input][data-id="${button.dataset.id}"]`)?.click();
