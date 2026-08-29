@@ -648,7 +648,7 @@ function updateCameraMode() {
   const memory = currentMemory();
   if (!memory) return;
   const count = remainingFor(memory, state.mode);
-  updateRemaining(count, state.mode);
+  updateRemaining(count, state.mode, { animate: false });
   const shutter = document.querySelector('[data-shutter]');
   if (shutter) {
     shutter.disabled = count === 0 || !activeStream;
@@ -1160,7 +1160,7 @@ function startRecordingVideo(memory, onDone) {
   state.recordingSecondsLeft = Math.max(memory.videoLength, 1);
   document.querySelector('.shutter')?.classList.add('recording');
   document.querySelector('.camera-label').textContent = 'Recording';
-  updateRemaining(state.recordingSecondsLeft, 'recording');
+  updateRemaining(state.recordingSecondsLeft, 'recording', { animate: false });
   const timer = window.setInterval(() => {
     if (!state.recording) {
       window.clearInterval(timer);
@@ -1308,11 +1308,12 @@ function triggerScreenFlash() {
   document.querySelector('.flash')?.animate([{ opacity: 0 }, { opacity: 0.55 }, { opacity: 0 }], { duration: 240 });
 }
 
-function updateRemaining(count, mode) {
+function updateRemaining(count, mode, options = {}) {
   const node = document.querySelector('[data-remaining]');
   const label = document.querySelector('[data-remaining-label]');
   if (node) node.textContent = count;
   if (label) label.textContent = remainingLabel(count, mode);
+  if (options.animate === false) return;
   node?.animate([{ transform: 'translateY(14px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { duration: 220, easing: 'ease-out' });
 }
 
