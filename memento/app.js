@@ -21,10 +21,6 @@ const inviteFromPath = explicitInvitePathIndex >= 0
   ? routeParts[explicitInvitePathIndex + 1]
   : routeParts[mementoPathIndex + 1];
 const inviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
-const standardPhoto = {
-  width: 1440,
-  height: 1800,
-};
 
 const state = {
   view: inviteCode ? 'invite' : 'home',
@@ -800,22 +796,10 @@ async function importLocalMedia(event) {
     }
     posterUrl = await generateVideoPoster(localUrl).catch(() => '');
   }
-  let uploadBlob = file;
-  let uploadType = file.type || 'application/octet-stream';
-  let displayUrl = localUrl;
-  if (type === 'photo') {
-    const normalized = await normalizeImageFile(file).catch(() => null);
-    if (normalized) {
-      URL.revokeObjectURL(localUrl);
-      uploadBlob = normalized.blob;
-      uploadType = 'image/jpeg';
-      displayUrl = normalized.localUrl;
-    }
-  }
   const item = addLocalCapture(memory.id, {
     id: crypto.randomUUID(),
     type,
-    localUrl: displayUrl,
+    localUrl,
     posterUrl,
     capturedByName: currentParticipantName(),
     sync: 'Syncing',
@@ -824,7 +808,7 @@ async function importLocalMedia(event) {
     showLastShot(item.localUrl, 'Syncing', type);
     updateCameraMode();
   }
-  uploadCapture(memory, item, uploadBlob, uploadType).catch(() => markCapture(memory.id, item.id, 'Retry'));
+  uploadCapture(memory, item, file, file.type || 'application/octet-stream').catch(() => markCapture(memory.id, item.id, 'Retry'));
   event.target.value = '';
 }
 
@@ -975,8 +959,7 @@ async function capturePhoto(video) {
     try {
       const imageCapture = new ImageCapture(activeTrack);
       const blob = await imageCapture.takePhoto();
-      const normalized = await normalizeImageFile(blob).catch(() => null);
-      return normalized || {
+      return {
         blob,
         localUrl: URL.createObjectURL(blob),
       };
@@ -998,11 +981,11 @@ async function capturePhoto(video) {
 
 async function canvasPhotoFromSource(source, width, height) {
   const canvas = document.createElement('canvas');
-  canvas.width = standardPhoto.width;
-  canvas.height = standardPhoto.height;
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas unavailable');
-  drawCover(context, source, width, height, canvas.width, canvas.height);
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => {
     if (canvas.toBlob) {
       canvas.toBlob(resolve, 'image/jpeg', 0.9);
@@ -1064,27 +1047,6 @@ function dataUrlToBlob(dataUrl) {
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return new Blob([bytes], { type: mime });
-}
-
-function normalizeImageFile(file) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const sourceUrl = URL.createObjectURL(file);
-    image.onload = async () => {
-      URL.revokeObjectURL(sourceUrl);
-      try {
-        const normalized = await canvasPhotoFromSource(image, image.naturalWidth, image.naturalHeight);
-        resolve(normalized);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(sourceUrl);
-      reject(new Error('Could not normalize image'));
-    };
-    image.src = sourceUrl;
-  });
 }
 
 function drawCover(context, source, sourceWidth, sourceHeight, targetWidth, targetHeight) {
@@ -1218,8 +1180,8 @@ function generateVideoPoster(url) {
       const width = video.videoWidth || 640;
       const height = video.videoHeight || 360;
       const canvas = document.createElement('canvas');
-      canvas.width = standardPhoto.width;
-      canvas.height = standardPhoto.height;
+      canvas.width = 720;
+      canvas.height = 900;
       const context = canvas.getContext('2d');
       if (!context) {
         reject(new Error('Canvas unavailable'));
