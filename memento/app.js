@@ -36,6 +36,7 @@ const state = {
   coverUrls: new Map(),
   mediaUrls: new Map(),
   localCaptures: new Map(),
+  albumOpenedAt: new Map(),
   viewer: null,
   reactions: new Map(),
   showCapturedBy: loadCapturedByPreference(),
@@ -661,6 +662,7 @@ function bind() {
   }));
   document.querySelectorAll('[data-open-album]').forEach((button) => button.addEventListener('click', () => {
     if (button.dataset.id) state.selectedId = button.dataset.id;
+    state.albumOpenedAt.set(button.dataset.id, Date.now());
     document.querySelector(`[data-album-input][data-id="${button.dataset.id}"]`)?.click();
   }));
   document.querySelector('[data-guest-menu]')?.addEventListener('click', () => {
@@ -783,8 +785,9 @@ async function importLocalMedia(event) {
   if (!memory || !file) return;
   const type = file.type.startsWith('video/') ? 'video' : 'photo';
   state.galleryNotice = '';
-  if (looksLikeFreshCameraCapture(file)) {
+  if (looksLikeFreshCameraCapture(file, memory.id)) {
     state.galleryNotice = 'Please use the Memento Camera button to take new photos or videos. Album is for importing from your library.';
+    state.albumOpenedAt.delete(memory.id);
     event.target.value = '';
     render();
     return;
@@ -796,12 +799,14 @@ async function importLocalMedia(event) {
       duration = await videoDuration(file);
     } catch {
       state.galleryNotice = 'Could not read this video. Please choose another clip.';
+      state.albumOpenedAt.delete(memory.id);
       event.target.value = '';
       render();
       return;
     }
     if (memory.videoLength > 0 && duration > memory.videoLength + 0.5) {
       state.galleryNotice = `This video is ${Math.round(duration)} seconds. This Memento allows videos up to ${memory.videoLength} seconds.`;
+      state.albumOpenedAt.delete(memory.id);
       event.target.value = '';
       render();
       return;
@@ -824,6 +829,7 @@ async function importLocalMedia(event) {
     updateCameraMode();
   }
   uploadCapture(memory, item, file, file.type || 'application/octet-stream').catch(() => markCapture(memory.id, item.id, 'Retry'));
+  state.albumOpenedAt.delete(memory.id);
   event.target.value = '';
 }
 
@@ -834,7 +840,11 @@ function addLocalCapture(memoryId, item) {
   return item;
 }
 
-function looksLikeFreshCameraCapture(file) {
+function looksLikeFreshCameraCapture(file, memoryId) {
+  const openedAt = state.albumOpenedAt.get(memoryId) || 0;
+  const capturedAfterAlbumOpened = openedAt && file.lastModified >= openedAt - 5000;
+  if (capturedAfterAlbumOpened) return true;
+
   const ageMs = Date.now() - file.lastModified;
   if (ageMs < 0 || ageMs > 90000) return false;
   const name = String(file.name || '').toLowerCase();
