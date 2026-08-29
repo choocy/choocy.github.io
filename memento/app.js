@@ -850,9 +850,12 @@ function looksLikeFreshCameraCapture(file, memoryId) {
   const agent = navigator.userAgent || '';
   const mobileSafari = /iPhone|iPad|iPod/i.test(agent) && /Safari/i.test(agent) && !/CriOS|FxiOS|EdgiOS/i.test(agent);
   const activePickerSession = openedAt && Date.now() - openedAt < 180000;
-  if (mobileSafari && activePickerSession && genericName) return true;
 
   const ageMs = Date.now() - file.lastModified;
+  const recentlyModified = ageMs >= 0 && ageMs < 600000;
+  if (mobileSafari && activePickerSession && recentlyModified) return true;
+  if (mobileSafari && activePickerSession && genericName) return true;
+
   if (ageMs < 0 || ageMs > 90000) return false;
   const mobileBrowser = /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(agent) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
   return mobileBrowser && genericName;
