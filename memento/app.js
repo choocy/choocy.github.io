@@ -17,7 +17,7 @@ const routeParams = new URLSearchParams(location.search);
 const inviteCode = (routeParams.get('invite') || routeParams.get('code') || '').trim();
 
 const state = {
-  view: inviteCode ? 'join' : 'home',
+  view: inviteCode ? 'invite' : 'home',
   inviteCode,
   guest: loadGuestSession(),
   loading: true,
@@ -297,6 +297,7 @@ function setView(next, id) {
 }
 
 function topbar() {
+  if (['invite', 'loading'].includes(state.view)) return '';
   return `
     <header class="topbar">
       <button class="brand" data-view="home" aria-label="Memento home">Memento</button>
@@ -317,26 +318,78 @@ function home() {
     </section>`;
 }
 
+function invite() {
+  if (state.loading) return loading();
+  if (state.error) return quietState('Invite unavailable', state.error, true);
+  const memory = currentMemory();
+  if (!memory) return emptyState();
+
+  return `
+    <section class="invite-open">
+      <div class="invite-backdrop">${imageMarkup(memory, 'invite-backdrop-image')}</div>
+      <article class="invite-panel">
+        <button class="invite-close" data-view="join" aria-label="Continue in browser">${icon('close')}</button>
+        <div class="invite-art">
+          <div class="invite-cardlet">
+            <h1>You're invited!</h1>
+            <p>Welcome to the private gallery. Capture the best moments today.</p>
+          </div>
+        </div>
+        <div class="invite-copy">
+          <div>
+            <h2>You're invited to the album!</h2>
+            <p>Capture memories to make it last forever.</p>
+          </div>
+          <button class="open-button" data-open-invite>Open</button>
+        </div>
+        <p class="invite-note">Open in the app when installed, or continue here in your browser.</p>
+        <div class="powered-row">
+          <span class="app-mark">*</span>
+          <span><small>Powered by</small><strong>Memento</strong></span>
+          <span class="store-link">App Store ></span>
+        </div>
+      </article>
+    </section>`;
+}
+
+function loading() {
+  return `
+    <section class="guest-loading">
+      ${appBanner()}
+      <div class="loading-center">
+        <span class="spinner"></span>
+        <p>Loading film...</p>
+      </div>
+    </section>`;
+}
+
+function appBanner() {
+  return `
+    <aside class="app-banner">
+      <span class="app-icon">*</span>
+      <span><small>Powered by</small><strong>Memento</strong><em>Guest camera for your event</em></span>
+      <a href="#" aria-label="Open Memento in the App Store">App Store ></a>
+    </aside>`;
+}
+
 function join() {
-  if (state.loading) return quietState('Opening Memento', 'Checking this event invite.');
+  if (state.loading) return loading();
   if (state.error) return quietState('Invite unavailable', state.error, true);
   const memory = currentMemory();
   if (!memory) return emptyState();
   if (state.guest?.mementoId === memory.id) return detail();
 
   return `
-    <section class="page join-page">
-      <div class="join-cover">
-        ${imageMarkup(memory, 'hero-cover')}
-      </div>
-      <form class="join-card" data-join-form>
-        <p class="kicker">Guest</p>
+    <section class="join-hero">
+      ${appBanner()}
+      <div class="join-bg">${imageMarkup(memory, 'join-bg-image')}</div>
+      <form class="join-overlay-card" data-join-form>
+        <p class="invited-by">${icon('users')} Invited by Memento</p>
         <h1>${escapeHtml(memory.title)}</h1>
-        <p>Starts ${escapeHtml(memory.date)}</p>
-        <p>Ends ${escapeHtml(memory.end)}</p>
-        <label class="field-label">Your name<input name="guest_name" autocomplete="name" maxlength="40" required></label>
+        <p class="event-meta">${icon('clock')} ${escapeHtml(memory.reveal)} <span></span> ${icon('camera')} ${memory.shots} shots available</p>
+        <label class="name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required></label>
         ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-        <button class="ink" type="submit">Join</button>
+        <button class="take-camera" type="submit">Take your camera ${icon('arrow-right')}</button>
       </form>
     </section>`;
 }
@@ -462,8 +515,12 @@ function remainingFor(memory, type) {
 function icon(name) {
   const icons = {
     'chevron-left': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6"/></svg>',
+    close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
     users: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 9-9-4-4-9 9-2 6 6-2Z"/><path d="m15 6 4 4"/></svg>',
+    'arrow-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
     'flash-off': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/><path d="m2 2 20 20"/></svg>',
     flash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/></svg>',
     flip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg>',
@@ -494,7 +551,7 @@ function updateCameraMode() {
 
 function render() {
   const app = document.getElementById('app');
-  const page = state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
+  const page = state.view === 'invite' ? invite() : state.view === 'loading' ? loading() : state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
   app.innerHTML = (state.view === 'camera' ? '' : topbar()) + page;
   bind();
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
@@ -513,10 +570,23 @@ function bind() {
     state.mode = button.dataset.mode;
     updateCameraMode();
   }));
+  document.querySelector('[data-open-invite]')?.addEventListener('click', openInvite);
 
   const cameraSurface = document.querySelector('.camera');
   cameraSurface?.addEventListener('dblclick', (event) => event.preventDefault());
   cameraSurface?.addEventListener('touchend', preventFastDoubleTap, { passive: false });
+}
+
+function openInvite() {
+  state.view = 'loading';
+  render();
+  window.location.href = `memento://invite/${encodeURIComponent(state.inviteCode)}`;
+  window.setTimeout(() => {
+    if (state.view === 'loading') {
+      state.view = 'join';
+      render();
+    }
+  }, 1100);
 }
 
 let lastTouchEnd = 0;
