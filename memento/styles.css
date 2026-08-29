@@ -164,6 +164,12 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .media-tile { position: relative; min-height: 0; aspect-ratio: 4 / 5; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--field); padding: 0; color: inherit; }
 .media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; }
 .media-tile small { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 4px; background: rgb(0 0 0 / 48%); color: white; font-size: 10px; text-align: center; }
+.media-tile.locked { background: #151515; }
+.media-tile.locked small { display: none; }
+.locked-preview { filter: blur(14px) saturate(.8) brightness(.58); transform: scale(1.08); }
+.locked-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: rgb(255 255 255 / 42%); background: linear-gradient(135deg, #191919, #252525); }
+.locked-placeholder svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.locked-label { position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 3; padding: 5px 7px; border-radius: 999px; background: rgb(0 0 0 / 52%); color: white; font-size: 10px; font-weight: 650; line-height: 1.15; text-align: center; backdrop-filter: blur(12px); }
 .captured-pill { position: absolute; left: 6px; bottom: 28px; z-index: 2; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-radius: 999px; background: rgb(0 0 0 / 42%); color: white; font-size: 10px; font-weight: 650; line-height: 1; backdrop-filter: blur(12px); }
 .media-tile .play { position: absolute; inset: 0; display: grid; place-items: center; color: white; }
 .media-tile .play svg { width: 34px; height: 34px; fill: rgb(255 255 255 / 88%); stroke: none; filter: drop-shadow(0 2px 8px rgb(0 0 0 / 60%)); }
@@ -177,6 +183,9 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .viewer-next { right: 12px; }
 .viewer-media { position: relative; min-height: 0; display: grid; place-items: center; padding: max(66px, env(safe-area-inset-top)) 14px 12px; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .viewer-frame { grid-area: 1 / 1; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.locked-viewer-placeholder { display: grid; place-items: center; color: rgb(255 255 255 / 42%); background: #151515; }
+.locked-viewer-placeholder svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.viewer-lock-label { position: absolute; left: 50%; bottom: 24px; z-index: 83; max-width: min(82vw, 360px); transform: translateX(-50%); padding: 8px 12px; border-radius: 999px; background: rgb(0 0 0 / 58%); color: white; font-size: 13px; font-weight: 650; backdrop-filter: blur(14px); }
 .viewer-frame.enter-right { animation: viewerEnterRight 320ms cubic-bezier(.22, .74, .16, 1) both; }
 .viewer-frame.enter-left { animation: viewerEnterLeft 320ms cubic-bezier(.22, .74, .16, 1) both; }
 .viewer-frame.exit-left { animation: viewerExitLeft 320ms cubic-bezier(.22, .74, .16, 1) both; }

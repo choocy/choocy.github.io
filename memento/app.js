@@ -50,6 +50,7 @@ const state = {
   recording: false,
   recordingSecondsLeft: 0,
 };
+let revealRefreshTimer = null;
 
 function headers() {
   return {
@@ -124,6 +125,7 @@ async function loadMemories() {
   } finally {
     state.loading = false;
     await hydrateCoverImages(false);
+    scheduleRevealRefresh();
     render();
   }
 }
@@ -149,6 +151,10 @@ function mapMemory(row, members = [], media = []) {
   const end = parseDate(row.end_time);
   const revealTime = parseDate(row.reveal_time) || end;
   const guestMedia = state.guest?.memberId ? media.filter((item) => item.member_id === state.guest.memberId) : [];
+  const revealMode = String(row.reveal_mode || '').toLowerCase();
+  const revealed = revealMode === 'live' || (revealTime && Date.now() >= revealTime.getTime());
+  const ownOnlyAfterReveal = Boolean(row.only_you_can_see_after_reveal ?? row.only_own_media_after_reveal ?? row.is_private_gallery ?? row.private_gallery);
+  const visibleMedia = media.filter((item) => isMediaVisibleForMemory(item, revealed, ownOnlyAfterReveal));
 
   return {
     id: row.id,
@@ -159,26 +165,40 @@ function mapMemory(row, members = [], media = []) {
     shots: numberValue(row.shots_per_guest, 0),
     videos: numberValue(row.videos_per_guest, 0),
     videoLength: numberValue(row.video_duration_seconds, 0),
+    revealMode,
+    revealTime,
+    revealed,
     reveal: revealLabel(row.reveal_mode, revealTime),
+    revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later',
+    ownOnlyAfterReveal,
     canHostPreview: Boolean(row.host_preview_before_reveal),
     guestLimit: numberValue(row.guest_limit, 0),
     joined: members.length,
     uploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
     uploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
-    media: guestMedia.map(mapMediaItem),
+    media: visibleMedia.map((item) => mapMediaItem(item, { revealed, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
     memberNames: members.map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
   };
 }
 
-function mapMediaItem(row) {
+function isMediaVisibleForMemory(row, revealed, ownOnlyAfterReveal) {
+  if (!state.guest?.memberId) return true;
+  if (!revealed) return true;
+  if (!ownOnlyAfterReveal) return true;
+  return row.member_id === state.guest.memberId;
+}
+
+function mapMediaItem(row, memory = {}) {
   const isCurrentParticipant = state.guest?.memberId && row.member_id === state.guest.memberId;
   return {
     id: row.id,
     type: row.media_type === 'video' ? 'video' : 'photo',
-    path: row.thumbnail_path || row.original_path,
+    path: row.thumbnail_path || '',
     originalPath: row.original_path,
+    locked: !memory.revealed,
+    revealLabel: `Reveals ${memory.revealAtLabel || 'later'}`,
     capturedByName: row.captured_by_name || (isCurrentParticipant ? currentParticipantName() : ''),
     sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
   };
@@ -214,6 +234,15 @@ function formatDateTime(date) {
 function revealLabel(mode, revealTime) {
   if (mode === 'live') return 'Live';
   return revealTime ? `Unlocks ${formatClock(revealTime)}` : 'Unlocks later';
+}
+
+function revealDateLabel(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
 }
 
 function formatClock(date) {
@@ -277,7 +306,10 @@ async function hydrateCoverImages(renderWhenDone = true) {
         memory.cover = url;
       }
     }
-    memory.media.forEach((item) => paths.push(item.path, item.originalPath));
+    memory.media.forEach((item) => {
+      if (item.path) paths.push(item.path);
+      if (!item.locked && item.originalPath) paths.push(item.originalPath);
+    });
   }));
   await Promise.all(paths.map((path) => storageObjectUrl(path)));
   if (renderWhenDone) render();
@@ -328,7 +360,8 @@ function imageMarkup(memory, className = '') {
 }
 
 function mediaUrl(item) {
-  return item.localUrl || state.mediaUrls.get(item.path) || state.mediaUrls.get(item.originalPath) || '';
+  if (item.locked) return item.localUrl || state.mediaUrls.get(item.path) || '';
+  return item.localUrl || state.mediaUrls.get(item.originalPath) || state.mediaUrls.get(item.path) || '';
 }
 
 function setView(next, id) {
@@ -340,6 +373,27 @@ function setView(next, id) {
   render();
   if (next === 'camera') startCamera();
 }
+
+function scheduleRevealRefresh() {
+  window.clearTimeout(revealRefreshTimer);
+  const nextReveal = state.memories
+    .filter((memory) => !memory.revealed && memory.revealTime)
+    .map((memory) => memory.revealTime.getTime() - Date.now())
+    .filter((delayMs) => delayMs > 0)
+    .sort((a, b) => a - b)[0];
+  if (!nextReveal) return;
+  revealRefreshTimer = window.setTimeout(() => {
+    state.mediaUrls.clear();
+    if (state.view !== 'camera') loadMemories();
+  }, Math.min(nextReveal + 1000, 2147483647));
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.view !== 'camera') {
+    state.mediaUrls.clear();
+    loadMemories();
+  }
+});
 
 function enterImmersiveMode() {
   const root = document.documentElement;
@@ -536,13 +590,16 @@ function guestGallery(memory) {
 
 function mediaTile(item, index) {
   const url = mediaUrl(item);
-  const capturedBy = state.showCapturedBy && item.capturedByName
+  const capturedBy = !item.locked && state.showCapturedBy && item.capturedByName
     ? `<span class="captured-pill">${escapeHtml(item.capturedByName)}</span>`
     : '';
-  const media = item.type === 'video'
+  const locked = item.locked ? `<span class="locked-label">${escapeHtml(item.revealLabel)}</span>` : '';
+  const media = item.locked
+    ? `${url ? `<img class="locked-preview" src="${url}" loading="lazy" alt="">` : `<span class="locked-placeholder">${icon('lock')}</span>`}`
+    : item.type === 'video'
     ? `${item.posterUrl ? `<img src="${item.posterUrl}" loading="lazy" alt="">` : `<video src="${url}" muted playsinline preload="metadata"></video>`}<span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="">`;
-  return `<button class="media-tile" data-open-media="${index}" type="button">${media}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
+  return `<button class="media-tile ${item.locked ? 'locked' : ''}" data-open-media="${index}" type="button">${media}${locked}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
 }
 
 function viewer(memory) {
@@ -568,7 +625,7 @@ function viewer(memory) {
       <button class="viewer-nav viewer-prev" data-viewer-step="-1" aria-label="Previous moment" ${previousIndex == null ? 'disabled' : ''}>${icon('chevron-left')}</button>
       <div class="viewer-media" data-viewer-swipe>${media}</div>
       <button class="viewer-nav viewer-next" data-viewer-step="1" aria-label="Next moment" ${nextIndex == null ? 'disabled' : ''}>${icon('chevron-right')}</button>
-      <div class="viewer-tools">
+      ${item.locked ? '' : `<div class="viewer-tools">
         <button data-react="${item.id}" data-reaction="liked" class="${reaction.liked ? 'selected' : ''}" type="button">${icon('heart')} Like</button>
         <button data-react="${item.id}" data-reaction="loved" class="${reaction.loved ? 'selected' : ''}" type="button">${icon('sparkle')} Love</button>
         <label><span>${reaction.emoji || 'Emoji'}</span><input data-emoji="${item.id}" maxlength="2" inputmode="text" value="${escapeHtml(reaction.emoji || '')}"></label>
@@ -576,13 +633,19 @@ function viewer(memory) {
         <button data-filter="${item.id}" data-filter-value="" type="button">Original</button>
         <button data-filter="${item.id}" data-filter-value="viewer-warm" type="button">Warm</button>
         <button data-filter="${item.id}" data-filter-value="viewer-mono" type="button">Mono</button>
-      </div>
-      ${reaction.emoji || reaction.caption ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
+      </div>`}
+      ${!item.locked && (reaction.emoji || reaction.caption) ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
     </aside>`;
 }
 
 function viewerMediaElement(item, url, reaction, className, active) {
   const classes = `${className} ${reaction.filter || ''}`.trim();
+  if (item.locked) {
+    const preview = url
+      ? `<img class="${classes} locked-preview" src="${url}" alt="">`
+      : `<div class="${classes} locked-viewer-placeholder">${icon('lock')}</div>`;
+    return `${preview}<span class="viewer-lock-label">${escapeHtml(item.revealLabel)}</span>`;
+  }
   return item.type === 'video'
     ? `<video class="${classes}" src="${url}" ${active ? 'controls autoplay' : 'muted'} playsinline></video>`
     : `<img class="${classes}" src="${url}" alt="">`;
@@ -652,6 +715,7 @@ function icon(name) {
     camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>',
     edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 9-9-4-4-9 9-2 6 6-2Z"/><path d="m15 6 4 4"/></svg>',
     'arrow-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
     menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>',
     'flash-off': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/><path d="m2 2 20 20"/></svg>',
     flash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/></svg>',
@@ -1003,6 +1067,13 @@ function rememberLocalCapture(memoryId, item) {
 
 function markCapture(memoryId, itemId, sync) {
   const list = state.localCaptures.get(memoryId) || [];
+  const memory = state.memories.find((entry) => entry.id === memoryId);
+  if (sync === 'Uploaded' && memory && !memory.revealed) {
+    state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
+    updateLastShotStatus(sync);
+    loadMemories();
+    return;
+  }
   const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
   state.localCaptures.set(memoryId, next);
   updateLastShotStatus(sync);
