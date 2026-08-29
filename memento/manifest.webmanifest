@@ -1,0 +1,20 @@
+{
+  "name": "Memento",
+  "short_name": "Memento",
+  "description": "Guest camera for shared Memento events.",
+  "start_url": "/memento/",
+  "scope": "/memento/",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/memento/assets/friends-night.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -313,10 +313,17 @@ function mediaUrl(item) {
 
 function setView(next, id) {
   if (state.view === 'camera' && next !== 'camera') stopCamera();
+  if (next === 'camera') enterImmersiveMode();
   state.view = next;
   if (id) state.selectedId = id;
   render();
   if (next === 'camera') startCamera();
+}
+
+function enterImmersiveMode() {
+  const root = document.documentElement;
+  if (document.fullscreenElement || !root.requestFullscreen) return;
+  root.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
 }
 
 function topbar() {

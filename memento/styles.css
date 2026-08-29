@@ -22,9 +22,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--background); color: var(--ink); }
-html.camera-open { touch-action: manipulation; overscroll-behavior: none; }
+html.camera-open { width: 100%; height: 100%; touch-action: manipulation; overscroll-behavior: none; background: #030303; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; }
-html.camera-open body { overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+html.camera-open body { width: 100%; height: 100%; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; background: #030303; }
 button, input, label { font: inherit; }
 button, label { cursor: pointer; }
 button:disabled { cursor: default; opacity: .38; }
@@ -175,7 +175,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .viewer-sticker { position: fixed; left: 50%; bottom: max(82px, calc(env(safe-area-inset-bottom) + 72px)); z-index: 82; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; max-width: min(86vw, 520px); padding: 9px 14px; border-radius: 999px; background: rgb(0 0 0 / 48%); color: white; backdrop-filter: blur(16px); }
 .viewer-sticker strong { font-size: 24px; line-height: 1; }
 .viewer-sticker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.camera { position: fixed; inset: 0; height: 100dvh; background: #030303; color: white; display: grid; place-items: center; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.camera { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100svh; height: 100dvh; background: #030303; color: white; display: grid; place-items: center; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .camera video { width: 100%; height: 100%; object-fit: cover; }
 .camera-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgb(0 0 0 / 72%), rgb(0 0 0 / 5%) 24%, rgb(0 0 0 / 8%) 58%, rgb(0 0 0 / 76%)); }
 .camera-label { top: 50%; left: 50%; right: auto; z-index: 2; transform: translate(-50%, -50%); width: max-content; max-width: calc(100% - 40px); background: rgb(0 0 0 / 34%); opacity: .72; font-size: 12px; }
