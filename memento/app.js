@@ -713,12 +713,7 @@ function toggleFlash() {
 }
 
 async function capturePhoto(video) {
-  if (!video.videoWidth || !video.videoHeight) {
-    await new Promise((resolve) => {
-      video.onloadedmetadata = resolve;
-      window.setTimeout(resolve, 500);
-    });
-  }
+  await waitForVideoFrame(video);
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
@@ -730,11 +725,27 @@ async function capturePhoto(video) {
       resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9)));
     }
   });
-  if (!blob) throw new Error('Could not capture photo');
+  const fallbackBlob = blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9));
   return {
-    blob,
-    localUrl: URL.createObjectURL(blob),
+    blob: fallbackBlob,
+    localUrl: URL.createObjectURL(fallbackBlob),
   };
+}
+
+async function waitForVideoFrame(video) {
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) return;
+  await new Promise((resolve) => {
+    const done = () => {
+      video.removeEventListener('loadeddata', done);
+      video.removeEventListener('canplay', done);
+      resolve();
+    };
+    video.addEventListener('loadeddata', done, { once: true });
+    video.addEventListener('canplay', done, { once: true });
+    window.setTimeout(done, 900);
+  });
+  if (video.paused) await video.play().catch(() => {});
+  if (!video.videoWidth || !video.videoHeight) throw new Error('Video frame is not ready');
 }
 
 function dataUrlToBlob(dataUrl) {
