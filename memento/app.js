@@ -783,6 +783,12 @@ async function importLocalMedia(event) {
   if (!memory || !file) return;
   const type = file.type.startsWith('video/') ? 'video' : 'photo';
   state.galleryNotice = '';
+  if (looksLikeFreshCameraCapture(file)) {
+    state.galleryNotice = 'Please use the Memento Camera button to take new photos or videos. Album is for importing from your library.';
+    event.target.value = '';
+    render();
+    return;
+  }
   let posterUrl = '';
   if (type === 'video') {
     let duration = 0;
@@ -826,6 +832,15 @@ function addLocalCapture(memoryId, item) {
   state.localCaptures.set(memoryId, [item, ...list]);
   if (state.view !== 'camera') render();
   return item;
+}
+
+function looksLikeFreshCameraCapture(file) {
+  const ageMs = Date.now() - file.lastModified;
+  if (ageMs < 0 || ageMs > 90000) return false;
+  const name = String(file.name || '').toLowerCase();
+  const genericName = !name || /^image\.(jpe?g|png|heic|heif)$/.test(name) || /^video\.(mov|mp4|webm)$/.test(name);
+  const mobileBrowser = /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent || '') || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return mobileBrowser && genericName;
 }
 
 function rememberLocalCapture(memoryId, item) {
