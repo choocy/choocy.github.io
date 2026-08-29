@@ -14,7 +14,13 @@ const supabase = {
 };
 
 const routeParams = new URLSearchParams(location.search);
-const inviteCode = (routeParams.get('invite') || routeParams.get('code') || '').trim();
+const routeParts = location.pathname.split('/').map(decodeURIComponent).filter(Boolean);
+const explicitInvitePathIndex = routeParts.findIndex((part) => ['invite', 'join'].includes(part.toLowerCase()));
+const mementoPathIndex = routeParts.findIndex((part) => part.toLowerCase() === 'memento');
+const inviteFromPath = explicitInvitePathIndex >= 0
+  ? routeParts[explicitInvitePathIndex + 1]
+  : routeParts[mementoPathIndex + 1];
+const inviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
 
 const state = {
   view: inviteCode ? 'invite' : 'home',
@@ -733,6 +739,13 @@ function openCameraStream(video, label) {
     activeStream = stream;
     activeTrack = stream.getVideoTracks()[0] || null;
     video.srcObject = stream;
+    video.muted = true;
+    video.setAttribute('playsinline', '');
+    video.play().then(() => {
+      label.textContent = 'Camera ready';
+    }).catch(() => {
+      label.textContent = 'Tap shutter when camera is ready';
+    });
     bindZoomIfSupported(stream);
     bindFlashIfSupported();
   }).catch(() => {
@@ -783,11 +796,25 @@ function toggleFlash() {
 }
 
 async function capturePhoto(video) {
+  if (activeTrack && typeof ImageCapture !== 'undefined') {
+    try {
+      const imageCapture = new ImageCapture(activeTrack);
+      const blob = await imageCapture.takePhoto();
+      return {
+        blob,
+        localUrl: URL.createObjectURL(blob),
+      };
+    } catch {
+      // Canvas capture below works on browsers without ImageCapture support.
+    }
+  }
   await waitForVideoFrame(video);
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas unavailable');
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => {
     if (canvas.toBlob) {
       canvas.toBlob(resolve, 'image/jpeg', 0.9);
@@ -803,16 +830,19 @@ async function capturePhoto(video) {
 }
 
 async function waitForVideoFrame(video) {
+  if (video.paused) await video.play().catch(() => {});
   if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) return;
   await new Promise((resolve) => {
     const done = () => {
       video.removeEventListener('loadeddata', done);
       video.removeEventListener('canplay', done);
+      video.removeEventListener('playing', done);
       resolve();
     };
     video.addEventListener('loadeddata', done, { once: true });
     video.addEventListener('canplay', done, { once: true });
-    window.setTimeout(done, 900);
+    video.addEventListener('playing', done, { once: true });
+    window.setTimeout(done, 1600);
   });
   if (video.paused) await video.play().catch(() => {});
   if (!video.videoWidth || !video.videoHeight) throw new Error('Video frame is not ready');
