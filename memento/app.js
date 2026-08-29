@@ -42,6 +42,7 @@ const state = {
   localCaptures: new Map(),
   albumOpenedAt: new Map(),
   viewer: null,
+  previousViewer: null,
   viewerDirection: 0,
   reactions: new Map(),
   showCapturedBy: loadCapturedByPreference(),
@@ -553,10 +554,14 @@ function viewer(memory) {
   const nextIndex = viewerIndex(items.length, 1);
   const url = mediaUrl(item);
   const reaction = state.reactions.get(item.id) || {};
-  const slideClass = state.viewerDirection < 0 ? ' slide-from-left' : state.viewerDirection > 0 ? ' slide-from-right' : '';
-  const media = item.type === 'video'
-    ? `<video class="${`${reaction.filter || ''}${slideClass}`.trim()}" src="${url}" controls autoplay playsinline></video>`
-    : `<img class="${`${reaction.filter || ''}${slideClass}`.trim()}" src="${url}" alt="">`;
+  const incomingClass = state.viewerDirection < 0 ? 'viewer-frame enter-left' : state.viewerDirection > 0 ? 'viewer-frame enter-right' : 'viewer-frame';
+  const outgoingItem = state.previousViewer == null ? null : items[state.previousViewer];
+  const outgoingReaction = outgoingItem ? state.reactions.get(outgoingItem.id) || {} : {};
+  const outgoingClass = state.viewerDirection < 0 ? 'viewer-frame exit-right' : state.viewerDirection > 0 ? 'viewer-frame exit-left' : '';
+  const outgoingMedia = outgoingItem && state.viewerDirection
+    ? viewerMediaElement(outgoingItem, mediaUrl(outgoingItem), outgoingReaction, outgoingClass, false)
+    : '';
+  const media = `${outgoingMedia}${viewerMediaElement(item, url, reaction, incomingClass, true)}`;
   return `
     <aside class="viewer" role="dialog" aria-modal="true">
       <button class="viewer-close" data-close-viewer aria-label="Close">${icon('close')}</button>
@@ -574,6 +579,13 @@ function viewer(memory) {
       </div>
       ${reaction.emoji || reaction.caption ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
     </aside>`;
+}
+
+function viewerMediaElement(item, url, reaction, className, active) {
+  const classes = `${className} ${reaction.filter || ''}`.trim();
+  return item.type === 'video'
+    ? `<video class="${classes}" src="${url}" ${active ? 'controls autoplay' : 'muted'} playsinline></video>`
+    : `<img class="${classes}" src="${url}" alt="">`;
 }
 
 function viewerIndex(total, step) {
@@ -703,11 +715,13 @@ function bind() {
   });
   document.querySelectorAll('[data-open-media]').forEach((button) => button.addEventListener('click', () => {
     state.viewer = Number(button.dataset.openMedia);
+    state.previousViewer = null;
     state.viewerDirection = 0;
     render();
   }));
   document.querySelector('[data-close-viewer]')?.addEventListener('click', () => {
     state.viewer = null;
+    state.previousViewer = null;
     state.viewerDirection = 0;
     render();
   });
@@ -747,6 +761,7 @@ function bind() {
   const cameraSurface = document.querySelector('.camera');
   cameraSurface?.addEventListener('dblclick', (event) => event.preventDefault());
   cameraSurface?.addEventListener('touchend', preventFastDoubleTap, { passive: false });
+  settleViewerAnimation();
 }
 
 function bindViewerSwipe() {
@@ -783,6 +798,7 @@ function bindViewerKeys() {
     if (event.key === 'ArrowRight') moveViewer(1);
     if (event.key === 'Escape') {
       state.viewer = null;
+      state.previousViewer = null;
       state.viewerDirection = 0;
       render();
     }
@@ -795,9 +811,19 @@ function moveViewer(step) {
   const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
   const next = viewerIndex(items.length, step);
   if (next == null) return;
+  state.previousViewer = state.viewer;
   state.viewerDirection = step;
   state.viewer = next;
   render();
+}
+
+function settleViewerAnimation() {
+  if (!state.viewerDirection) return;
+  window.clearTimeout(viewerAnimationTimer);
+  viewerAnimationTimer = window.setTimeout(() => {
+    state.previousViewer = null;
+    state.viewerDirection = 0;
+  }, 360);
 }
 
 function openInvite() {
@@ -990,6 +1016,7 @@ let activeTrack = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let flashMode = false;
+let viewerAnimationTimer = null;
 
 function startCamera() {
   const memory = currentMemory();
