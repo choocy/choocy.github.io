@@ -479,6 +479,10 @@ function camera() {
   const videos = remainingFor(memory, 'video');
   const currentRemaining = state.mode === 'video' ? videos : photos;
   const joined = state.guest?.mementoId === memory.id ? Math.max(memory.joined, 1) : memory.joined;
+  const nativePhoto = prefersNativeCapture();
+  const shutterControl = nativePhoto && state.mode === 'photo'
+    ? `<label class="shutter native-shutter" data-native-shutter aria-label="Take photo"><input type="file" accept="image/*" capture="environment" data-local-import data-native-capture data-id="${memory.id}"></label>`
+    : `<button class="shutter" data-shutter aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>`;
   return `
     <section class="camera">
       <video autoplay playsinline muted></video>
@@ -501,13 +505,13 @@ function camera() {
       </div>
       <div class="camera-bottom">
         <label class="last-shot import-tile"><img alt=""><span></span><input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label>
-        <button class="shutter" data-shutter aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
+        ${shutterControl}
         <div class="tool-stack">
           <button data-flash aria-label="Flash">${icon('flash-off')}</button>
           <button data-facing aria-label="Switch camera">${icon('flip')}</button>
         </div>
       </div>
-      <input class="native-capture-input" type="file" accept="image/*" capture="environment" data-local-import data-native-capture data-id="${memory.id}">
+      ${nativePhoto ? '' : `<input class="native-capture-input" type="file" accept="image/*" capture="environment" data-local-import data-native-capture data-id="${memory.id}">`}
       <div class="flash"></div>
     </section>`;
 }
@@ -554,6 +558,8 @@ function updateCameraMode() {
     shutter.ariaLabel = state.mode === 'photo' ? 'Take photo' : 'Record video';
     shutter.classList.toggle('video-ready', state.mode === 'video');
   }
+  const nativeShutter = document.querySelector('[data-native-shutter]');
+  if (nativeShutter) nativeShutter.classList.toggle('disabled', count === 0);
 }
 
 function render() {
@@ -575,6 +581,11 @@ function bind() {
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
     state.mode = button.dataset.mode;
+    if (prefersNativeCapture()) {
+      render();
+      startCamera();
+      return;
+    }
     updateCameraMode();
   }));
   document.querySelector('[data-open-invite]')?.addEventListener('click', openInvite);
@@ -893,7 +904,7 @@ function prefersNativeCapture() {
   const platform = navigator.platform || '';
   const agent = navigator.userAgent || '';
   const isiPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-  return /iPhone|iPad|iPod/i.test(agent) || isiPadOS;
+  return /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(agent) || isiPadOS;
 }
 
 function dataUrlToBlob(dataUrl) {
