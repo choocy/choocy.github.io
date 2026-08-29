@@ -783,17 +783,26 @@ async function importLocalMedia(event) {
   if (!memory || !file) return;
   const type = file.type.startsWith('video/') ? 'video' : 'photo';
   state.galleryNotice = '';
-  const localUrl = URL.createObjectURL(file);
   let posterUrl = '';
   if (type === 'video') {
-    const duration = await videoDuration(localUrl).catch(() => 0);
-    if (memory.videoLength > 0 && duration > memory.videoLength + 0.5) {
-      URL.revokeObjectURL(localUrl);
-      state.galleryNotice = `Video is longer than ${memory.videoLength} seconds. Please choose a shorter clip.`;
+    let duration = 0;
+    try {
+      duration = await videoDuration(file);
+    } catch {
+      state.galleryNotice = 'Could not read this video. Please choose another clip.';
       event.target.value = '';
       render();
       return;
     }
+    if (memory.videoLength > 0 && duration > memory.videoLength + 0.5) {
+      state.galleryNotice = `This video is ${Math.round(duration)} seconds. This Memento allows videos up to ${memory.videoLength} seconds.`;
+      event.target.value = '';
+      render();
+      return;
+    }
+  }
+  const localUrl = URL.createObjectURL(file);
+  if (type === 'video') {
     posterUrl = await generateVideoPoster(localUrl).catch(() => '');
   }
   const item = addLocalCapture(memory.id, {
@@ -1158,14 +1167,23 @@ function videoExtension(contentType) {
   return 'webm';
 }
 
-function videoDuration(url) {
+function videoDuration(file) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    const cleanup = () => URL.revokeObjectURL(url);
     video.preload = 'metadata';
     video.muted = true;
     video.playsInline = true;
-    video.onloadedmetadata = () => resolve(video.duration || 0);
-    video.onerror = () => reject(new Error('Could not read video duration'));
+    video.onloadedmetadata = () => {
+      const duration = video.duration || 0;
+      cleanup();
+      resolve(duration);
+    };
+    video.onerror = () => {
+      cleanup();
+      reject(new Error('Could not read video duration'));
+    };
     video.src = url;
   });
 }
