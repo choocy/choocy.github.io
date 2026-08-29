@@ -845,11 +845,16 @@ function looksLikeFreshCameraCapture(file, memoryId) {
   const capturedAfterAlbumOpened = openedAt && file.lastModified >= openedAt - 5000;
   if (capturedAfterAlbumOpened) return true;
 
-  const ageMs = Date.now() - file.lastModified;
-  if (ageMs < 0 || ageMs > 90000) return false;
   const name = String(file.name || '').toLowerCase();
   const genericName = !name || /^image\.(jpe?g|png|heic|heif)$/.test(name) || /^video\.(mov|mp4|webm)$/.test(name);
-  const mobileBrowser = /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent || '') || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const agent = navigator.userAgent || '';
+  const mobileSafari = /iPhone|iPad|iPod/i.test(agent) && /Safari/i.test(agent) && !/CriOS|FxiOS|EdgiOS/i.test(agent);
+  const activePickerSession = openedAt && Date.now() - openedAt < 180000;
+  if (mobileSafari && activePickerSession && genericName) return true;
+
+  const ageMs = Date.now() - file.lastModified;
+  if (ageMs < 0 || ageMs > 90000) return false;
+  const mobileBrowser = /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(agent) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
   return mobileBrowser && genericName;
 }
 
