@@ -34,6 +34,8 @@ const state = {
   coverUrls: new Map(),
   mediaUrls: new Map(),
   localCaptures: new Map(),
+  viewer: null,
+  reactions: new Map(),
   mode: 'photo',
   recording: false,
   recordingSecondsLeft: 0,
@@ -454,6 +456,7 @@ function detail() {
         <div class="actions detail-actions">${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}<label class="ghost">Album<input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label></div>
         ${guestGallery(memory)}
       </div>
+      ${viewer(memory)}
     </section>`;
 }
 
@@ -461,15 +464,42 @@ function guestGallery(memory) {
   const local = state.localCaptures.get(memory.id) || [];
   const items = [...local, ...memory.media];
   if (!items.length) return '<section class="guest-gallery empty-gallery"><p>No moments yet.</p></section>';
-  return `<section class="guest-gallery">${items.map(mediaTile).join('')}</section>`;
+  return `<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index)).join('')}</section>`;
 }
 
-function mediaTile(item) {
+function mediaTile(item, index) {
   const url = mediaUrl(item);
   const media = item.type === 'video'
     ? `<video src="${url}" muted playsinline preload="metadata"></video><span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="">`;
-  return `<article class="media-tile">${media}<small>${escapeHtml(item.sync || 'Uploaded')}</small></article>`;
+  return `<button class="media-tile" data-open-media="${index}" type="button">${media}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
+}
+
+function viewer(memory) {
+  if (state.viewer == null) return '';
+  const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
+  const item = items[state.viewer];
+  if (!item) return '';
+  const url = mediaUrl(item);
+  const reaction = state.reactions.get(item.id) || {};
+  const media = item.type === 'video'
+    ? `<video class="${reaction.filter || ''}" src="${url}" controls autoplay playsinline></video>`
+    : `<img class="${reaction.filter || ''}" src="${url}" alt="">`;
+  return `
+    <aside class="viewer" role="dialog" aria-modal="true">
+      <button class="viewer-close" data-close-viewer aria-label="Close">${icon('close')}</button>
+      <div class="viewer-media">${media}</div>
+      <div class="viewer-tools">
+        <button data-react="${item.id}" data-reaction="liked" class="${reaction.liked ? 'selected' : ''}" type="button">${icon('heart')} Like</button>
+        <button data-react="${item.id}" data-reaction="loved" class="${reaction.loved ? 'selected' : ''}" type="button">${icon('sparkle')} Love</button>
+        <label><span>${reaction.emoji || 'Emoji'}</span><input data-emoji="${item.id}" maxlength="2" inputmode="text" value="${escapeHtml(reaction.emoji || '')}"></label>
+        <label class="caption-field"><span>Text</span><input data-caption="${item.id}" maxlength="80" value="${escapeHtml(reaction.caption || '')}"></label>
+        <button data-filter="${item.id}" data-filter-value="" type="button">Original</button>
+        <button data-filter="${item.id}" data-filter-value="viewer-warm" type="button">Warm</button>
+        <button data-filter="${item.id}" data-filter-value="viewer-mono" type="button">Mono</button>
+      </div>
+      ${reaction.emoji || reaction.caption ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
+    </aside>`;
 }
 
 function camera() {
@@ -531,6 +561,8 @@ function icon(name) {
     flash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/></svg>',
     flip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg>',
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>',
+    heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>',
+    sparkle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.9L20 11l-6.1 2.1L12 19l-1.9-5.9L4 11l6.1-2.1L12 3Z"/></svg>',
   };
   return icons[name] || '';
 }
@@ -570,6 +602,34 @@ function bind() {
 
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
   document.querySelectorAll('[data-local-import]').forEach((input) => input.addEventListener('change', importLocalMedia));
+  document.querySelectorAll('[data-open-media]').forEach((button) => button.addEventListener('click', () => {
+    state.viewer = Number(button.dataset.openMedia);
+    render();
+  }));
+  document.querySelector('[data-close-viewer]')?.addEventListener('click', () => {
+    state.viewer = null;
+    render();
+  });
+  document.querySelectorAll('[data-react]').forEach((button) => button.addEventListener('click', () => {
+    const current = state.reactions.get(button.dataset.react) || {};
+    state.reactions.set(button.dataset.react, { ...current, [button.dataset.reaction]: !current[button.dataset.reaction] });
+    render();
+  }));
+  document.querySelectorAll('[data-emoji]').forEach((input) => input.addEventListener('change', () => {
+    const current = state.reactions.get(input.dataset.emoji) || {};
+    state.reactions.set(input.dataset.emoji, { ...current, emoji: input.value.trim() });
+    render();
+  }));
+  document.querySelectorAll('[data-caption]').forEach((input) => input.addEventListener('change', () => {
+    const current = state.reactions.get(input.dataset.caption) || {};
+    state.reactions.set(input.dataset.caption, { ...current, caption: input.value.trim() });
+    render();
+  }));
+  document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
+    const current = state.reactions.get(button.dataset.filter) || {};
+    state.reactions.set(button.dataset.filter, { ...current, filter: button.dataset.filterValue });
+    render();
+  }));
   document.querySelector('[data-join-form]')?.addEventListener('submit', joinMemento);
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -908,6 +968,10 @@ function startRecordingVideo(memory, onDone) {
   }
   recordedChunks = [];
   const mimeType = supportedVideoMimeType();
+  if (!mimeType) {
+    document.querySelector('.camera-label').textContent = 'Video upload needs MP4 support';
+    return;
+  }
   mediaRecorder = new MediaRecorder(activeStream, mimeType ? { mimeType } : undefined);
   state.recording = true;
   state.recordingSecondsLeft = Math.max(memory.videoLength, 1);
@@ -931,29 +995,38 @@ function startRecordingVideo(memory, onDone) {
     window.clearInterval(timer);
     document.querySelector('.shutter')?.classList.remove('recording');
     const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+    if (!blob.size) {
+      document.querySelector('.camera-label').textContent = 'Could not save video';
+      updateCameraMode();
+      return;
+    }
     const localUrl = URL.createObjectURL(blob);
     const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'video', localUrl, sync: 'Syncing' });
     showLastShot(localUrl, 'Syncing', 'video');
-    uploadCapture(memory, item, blob, blob.type).catch(() => markCapture(memory.id, item.id, 'Retry'));
+    uploadCapture(memory, item, blob, blob.type || 'video/webm').catch(() => markCapture(memory.id, item.id, 'Retry'));
     onDone();
   };
-  mediaRecorder.start();
+  mediaRecorder.start(1000);
 }
 
 function stopRecordingVideo() {
-  if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+  if (mediaRecorder?.state === 'recording') {
+    mediaRecorder.requestData?.();
+    mediaRecorder.stop();
+  }
 }
 
 function supportedVideoMimeType() {
-  const types = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+  const types = ['video/mp4;codecs=h264', 'video/mp4'];
   return types.find((type) => MediaRecorder.isTypeSupported(type)) || '';
 }
 
 async function uploadCapture(memory, item, blob, contentType) {
   if (!state.guest?.memberId) throw new Error('Missing guest member');
   const extension = contentType.includes('video') ? videoExtension(contentType) : 'jpg';
+  const uploadType = item.type === 'video' ? 'video/mp4' : contentType;
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
-  await uploadStorageObject(storagePath, blob, contentType);
+  await uploadStorageObject(storagePath, blob, uploadType);
   await supabaseInsert('media_items?select=id', {
     memento_id: memory.id,
     member_id: state.guest.memberId,
