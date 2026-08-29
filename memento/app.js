@@ -507,7 +507,7 @@ function camera() {
           <button data-facing aria-label="Switch camera">${icon('flip')}</button>
         </div>
       </div>
-      <input type="file" accept="image/*" capture="environment" hidden data-local-import data-native-capture data-id="${memory.id}">
+      <input class="native-capture-input" type="file" accept="image/*" capture="environment" data-local-import data-native-capture data-id="${memory.id}">
       <div class="flash"></div>
     </section>`;
 }
@@ -725,6 +725,12 @@ function startCamera() {
     }
     let photos = remainingFor(memory, 'photo');
     if (photos <= 0) return;
+    const nativeInput = document.querySelector('[data-native-capture]');
+    if (nativeInput && prefersNativeCapture()) {
+      label.textContent = 'Take a photo';
+      nativeInput.click();
+      return;
+    }
     try {
       const photo = await capturePhoto(video);
       photos = Math.max(0, photos - 1);
@@ -734,7 +740,6 @@ function startCamera() {
       updateRemaining(photos, state.mode);
       uploadCapture(memory, item, photo.blob, 'image/jpeg').catch(() => markCapture(memory.id, item.id, 'Retry'));
     } catch (error) {
-      const nativeInput = document.querySelector('[data-native-capture]');
       if (nativeInput) {
         label.textContent = 'Opening camera';
         nativeInput.click();
@@ -882,6 +887,13 @@ function hasVideoFrame(video) {
 
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function prefersNativeCapture() {
+  const platform = navigator.platform || '';
+  const agent = navigator.userAgent || '';
+  const isiPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return /iPhone|iPad|iPod/i.test(agent) || isiPadOS;
 }
 
 function dataUrlToBlob(dataUrl) {

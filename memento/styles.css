@@ -197,6 +197,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .tool-stack button.active { color: #ffe500; }
 .tool-stack button:disabled { opacity: .34; }
 .tool-stack svg { width: 22px; height: 22px; }
+.native-capture-input { position: fixed; left: -100vw; top: 0; width: 1px; height: 1px; opacity: .01; pointer-events: none; }
 @media (max-width: 720px) {
   .topbar { height: 58px; }
   nav .ghost { display: none; }
