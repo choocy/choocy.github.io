@@ -479,10 +479,6 @@ function camera() {
   const videos = remainingFor(memory, 'video');
   const currentRemaining = state.mode === 'video' ? videos : photos;
   const joined = state.guest?.mementoId === memory.id ? Math.max(memory.joined, 1) : memory.joined;
-  const nativePhoto = prefersNativeCapture();
-  const shutterControl = nativePhoto && state.mode === 'photo'
-    ? `<label class="shutter native-shutter" data-native-shutter aria-label="Take photo"><input type="file" accept="image/*" capture="environment" data-local-import data-native-capture data-id="${memory.id}"></label>`
-    : `<button class="shutter" data-shutter aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>`;
   return `
     <section class="camera">
       <video autoplay playsinline muted></video>
@@ -505,13 +501,12 @@ function camera() {
       </div>
       <div class="camera-bottom">
         <label class="last-shot import-tile"><img alt=""><span></span><input type="file" accept="image/*,video/*" hidden data-local-import data-id="${memory.id}"></label>
-        ${shutterControl}
+        <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
         <div class="tool-stack">
           <button data-flash aria-label="Flash">${icon('flash-off')}</button>
           <button data-facing aria-label="Switch camera">${icon('flip')}</button>
         </div>
       </div>
-      ${nativePhoto ? '' : `<input class="native-capture-input" type="file" accept="image/*" capture="environment" data-local-import data-native-capture data-id="${memory.id}">`}
       <div class="flash"></div>
     </section>`;
 }
@@ -554,12 +549,10 @@ function updateCameraMode() {
   updateRemaining(count, state.mode);
   const shutter = document.querySelector('[data-shutter]');
   if (shutter) {
-    shutter.disabled = count === 0;
+    shutter.disabled = count === 0 || !activeStream;
     shutter.ariaLabel = state.mode === 'photo' ? 'Take photo' : 'Record video';
     shutter.classList.toggle('video-ready', state.mode === 'video');
   }
-  const nativeShutter = document.querySelector('[data-native-shutter]');
-  if (nativeShutter) nativeShutter.classList.toggle('disabled', count === 0);
 }
 
 function render() {
@@ -581,11 +574,6 @@ function bind() {
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
     state.mode = button.dataset.mode;
-    if (prefersNativeCapture()) {
-      render();
-      startCamera();
-      return;
-    }
     updateCameraMode();
   }));
   document.querySelector('[data-open-invite]')?.addEventListener('click', openInvite);
@@ -736,27 +724,18 @@ function startCamera() {
     }
     let photos = remainingFor(memory, 'photo');
     if (photos <= 0) return;
-    const nativeInput = document.querySelector('[data-native-capture]');
-    if (nativeInput && prefersNativeCapture()) {
-      label.textContent = 'Take a photo';
-      nativeInput.click();
-      return;
-    }
+    event.currentTarget.disabled = true;
     try {
       const photo = await capturePhoto(video);
       photos = Math.max(0, photos - 1);
-      event.currentTarget.disabled = photos === 0;
       const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
       updateRemaining(photos, state.mode);
       uploadCapture(memory, item, photo.blob, 'image/jpeg').catch(() => markCapture(memory.id, item.id, 'Retry'));
     } catch (error) {
-      if (nativeInput) {
-        label.textContent = 'Opening camera';
-        nativeInput.click();
-        return;
-      }
       label.textContent = `Could not capture photo${error?.message ? `: ${error.message}` : ''}`;
+    } finally {
+      event.currentTarget.disabled = remainingFor(memory, 'photo') === 0 || !activeStream;
     }
   });
 }
@@ -772,8 +751,10 @@ function openCameraStream(video, label) {
     video.setAttribute('playsinline', '');
     video.play().then(() => {
       label.textContent = 'Camera ready';
+      updateCameraMode();
     }).catch(() => {
       label.textContent = 'Tap shutter when camera is ready';
+      updateCameraMode();
     });
     bindZoomIfSupported(stream);
     bindFlashIfSupported();
@@ -835,18 +816,28 @@ async function capturePhoto(video) {
         localUrl: URL.createObjectURL(blob),
       };
     } catch {
-      // Canvas capture below works on browsers without ImageCapture support.
+      try {
+        const imageCapture = new ImageCapture(activeTrack);
+        const bitmap = await imageCapture.grabFrame();
+        return canvasPhotoFromSource(bitmap, bitmap.width, bitmap.height);
+      } catch {
+        // Canvas capture below works on browsers without ImageCapture support.
+      }
     }
   }
-  const canvas = document.createElement('canvas');
   const settings = activeTrack?.getSettings?.() || {};
   const width = video.videoWidth || settings.width || 1280;
   const height = video.videoHeight || settings.height || 720;
+  return canvasPhotoFromSource(video, width, height);
+}
+
+async function canvasPhotoFromSource(source, width, height) {
+  const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas unavailable');
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => {
     if (canvas.toBlob) {
       canvas.toBlob(resolve, 'image/jpeg', 0.9);
@@ -893,18 +884,12 @@ async function ensureCameraReady(video) {
 
 function hasVideoFrame(video) {
   const settings = activeTrack?.getSettings?.() || {};
-  return video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && Boolean(video.videoWidth || settings.width) && Boolean(video.videoHeight || settings.height);
+  const hasSize = Boolean(video.videoWidth || settings.width) && Boolean(video.videoHeight || settings.height);
+  return hasSize && (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA || activeTrack?.readyState === 'live');
 }
 
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function prefersNativeCapture() {
-  const platform = navigator.platform || '';
-  const agent = navigator.userAgent || '';
-  const isiPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-  return /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(agent) || isiPadOS;
 }
 
 function dataUrlToBlob(dataUrl) {
