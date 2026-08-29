@@ -36,6 +36,7 @@ const state = {
   localCaptures: new Map(),
   viewer: null,
   reactions: new Map(),
+  showCapturedBy: loadCapturedByPreference(),
   mode: 'photo',
   recording: false,
   recordingSecondsLeft: 0,
@@ -129,7 +130,7 @@ async function fetchGuestMementos() {
   const [rows, members, media] = await Promise.all([
     supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
     supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}&role=eq.guest`),
-    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at&memento_id=eq.${encodeURIComponent(mementoId)}`),
+    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}`),
   ]);
   return rows.map((row) => mapMemory(row, members, media));
 }
@@ -168,6 +169,7 @@ function mapMediaItem(row) {
     type: row.media_type === 'video' ? 'video' : 'photo',
     path: row.thumbnail_path || row.original_path,
     originalPath: row.original_path,
+    capturedByName: row.captured_by_name || '',
     sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
   };
 }
@@ -229,6 +231,15 @@ function saveGuestSession(guest) {
   state.guest = guest;
 }
 
+function loadCapturedByPreference() {
+  return localStorage.getItem('memento_show_captured_by') !== 'false';
+}
+
+function saveCapturedByPreference(value) {
+  localStorage.setItem('memento_show_captured_by', value ? 'true' : 'false');
+  state.showCapturedBy = value;
+}
+
 function stateKey() {
   return inviteCode || 'direct';
 }
@@ -240,6 +251,10 @@ function getDeviceId() {
   const next = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   localStorage.setItem(key, next);
   return next;
+}
+
+function currentParticipantName() {
+  return String(state.guest?.name || '').trim();
 }
 
 async function hydrateCoverImages() {
@@ -463,16 +478,24 @@ function detail() {
 function guestGallery(memory) {
   const local = state.localCaptures.get(memory.id) || [];
   const items = [...local, ...memory.media];
-  if (!items.length) return '<section class="guest-gallery empty-gallery"><p>No moments yet.</p></section>';
-  return `<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index)).join('')}</section>`;
+  const toggle = `
+    <div class="gallery-heading">
+      <h2>Gallery</h2>
+      <label class="name-toggle">Names <input type="checkbox" data-captured-toggle ${state.showCapturedBy ? 'checked' : ''}></label>
+    </div>`;
+  if (!items.length) return `${toggle}<section class="guest-gallery empty-gallery"><p>No moments yet.</p></section>`;
+  return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index)).join('')}</section>`;
 }
 
 function mediaTile(item, index) {
   const url = mediaUrl(item);
+  const capturedBy = state.showCapturedBy && item.capturedByName
+    ? `<span class="captured-pill">${escapeHtml(item.capturedByName)}</span>`
+    : '';
   const media = item.type === 'video'
     ? `<video src="${url}" muted playsinline preload="metadata"></video><span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="">`;
-  return `<button class="media-tile" data-open-media="${index}" type="button">${media}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
+  return `<button class="media-tile" data-open-media="${index}" type="button">${media}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
 }
 
 function viewer(memory) {
@@ -602,6 +625,10 @@ function bind() {
 
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
   document.querySelectorAll('[data-local-import]').forEach((input) => input.addEventListener('change', importLocalMedia));
+  document.querySelector('[data-captured-toggle]')?.addEventListener('change', (event) => {
+    saveCapturedByPreference(event.currentTarget.checked);
+    render();
+  });
   document.querySelectorAll('[data-open-media]').forEach((button) => button.addEventListener('click', () => {
     state.viewer = Number(button.dataset.openMedia);
     render();
@@ -714,6 +741,7 @@ async function importLocalMedia(event) {
     id: crypto.randomUUID(),
     type,
     localUrl: URL.createObjectURL(file),
+    capturedByName: currentParticipantName(),
     sync: 'Syncing',
   });
   if (state.view === 'camera') {
@@ -788,7 +816,7 @@ function startCamera() {
     try {
       const photo = await capturePhoto(video);
       photos = Math.max(0, photos - 1);
-      const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, sync: 'Syncing' });
+      const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
       updateRemaining(photos, state.mode);
       uploadCapture(memory, item, photo.blob, 'image/jpeg').catch(() => markCapture(memory.id, item.id, 'Retry'));
@@ -1001,7 +1029,7 @@ function startRecordingVideo(memory, onDone) {
       return;
     }
     const localUrl = URL.createObjectURL(blob);
-    const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'video', localUrl, sync: 'Syncing' });
+    const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'video', localUrl, capturedByName: currentParticipantName(), sync: 'Syncing' });
     showLastShot(localUrl, 'Syncing', 'video');
     uploadCapture(memory, item, blob, blob.type || 'video/webm').catch(() => markCapture(memory.id, item.id, 'Retry'));
     onDone();
@@ -1032,6 +1060,7 @@ async function uploadCapture(memory, item, blob, contentType) {
     member_id: state.guest.memberId,
     media_type: item.type,
     original_path: storagePath,
+    captured_by_name: item.capturedByName || currentParticipantName(),
     file_size_bytes: blob.size,
     duration_seconds: item.type === 'video' ? memory.videoLength : null,
     uploaded_at: new Date().toISOString(),
