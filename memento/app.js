@@ -792,6 +792,13 @@ async function importLocalMedia(event) {
     render();
     return;
   }
+  if (looksLikeFileProviderImport(file, memory.id)) {
+    state.galleryNotice = 'Please choose photos or videos from Photo Library. File providers are not supported for this Memento.';
+    state.albumOpenedAt.delete(memory.id);
+    event.target.value = '';
+    render();
+    return;
+  }
   let posterUrl = '';
   if (type === 'video') {
     let duration = 0;
@@ -857,8 +864,26 @@ function looksLikeFreshCameraCapture(file, memoryId) {
   if (mobileSafari && activePickerSession && genericName) return true;
 
   if (ageMs < 0 || ageMs > 90000) return false;
-  const mobileBrowser = /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(agent) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
-  return mobileBrowser && genericName;
+  return isMobileBrowser() && genericName;
+}
+
+function looksLikeFileProviderImport(file, memoryId) {
+  const openedAt = state.albumOpenedAt.get(memoryId) || 0;
+  if (!openedAt || Date.now() - openedAt > 180000) return false;
+  if (!isMobileBrowser()) return false;
+  const name = String(file.name || '').toLowerCase();
+  if (!name) return false;
+  return !looksLikePhotoLibraryName(name);
+}
+
+function looksLikePhotoLibraryName(name) {
+  return /^(img|vid|pxl|dsc|dji|gopr|gh|mvimg|live|screenshot|screenrecording|rpreplay)[-_ ]?\d/i.test(name)
+    || /^image\.(jpe?g|png|heic|heif)$/.test(name)
+    || /^video\.(mov|mp4|webm)$/.test(name);
+}
+
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent || '') || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function rememberLocalCapture(memoryId, item) {
