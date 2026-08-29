@@ -878,8 +878,9 @@ function looksLikeFileProviderImport(file, memoryId) {
 
 function looksLikePhotoLibraryName(name) {
   return /^(img|vid|pxl|dsc|dji|gopr|gh|mvimg|live|screenshot|screenrecording|rpreplay)[-_ ]?\d/i.test(name)
-    || /^image\.(jpe?g|png|heic|heif)$/.test(name)
-    || /^video\.(mov|mp4|webm)$/.test(name);
+    || /^fullsizerender/i.test(name)
+    || /^screen ?shot \d{4}/i.test(name)
+    || /^screen ?recording \d{4}/i.test(name);
 }
 
 function isMobileBrowser() {
