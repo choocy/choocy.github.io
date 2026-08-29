@@ -548,6 +548,8 @@ function viewer(memory) {
   const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
   const item = items[state.viewer];
   if (!item) return '';
+  const previousIndex = viewerIndex(items.length, -1);
+  const nextIndex = viewerIndex(items.length, 1);
   const url = mediaUrl(item);
   const reaction = state.reactions.get(item.id) || {};
   const media = item.type === 'video'
@@ -556,7 +558,9 @@ function viewer(memory) {
   return `
     <aside class="viewer" role="dialog" aria-modal="true">
       <button class="viewer-close" data-close-viewer aria-label="Close">${icon('close')}</button>
-      <div class="viewer-media">${media}</div>
+      <button class="viewer-nav viewer-prev" data-viewer-step="-1" aria-label="Previous moment" ${previousIndex == null ? 'disabled' : ''}>${icon('chevron-left')}</button>
+      <div class="viewer-media" data-viewer-swipe>${media}</div>
+      <button class="viewer-nav viewer-next" data-viewer-step="1" aria-label="Next moment" ${nextIndex == null ? 'disabled' : ''}>${icon('chevron-right')}</button>
       <div class="viewer-tools">
         <button data-react="${item.id}" data-reaction="liked" class="${reaction.liked ? 'selected' : ''}" type="button">${icon('heart')} Like</button>
         <button data-react="${item.id}" data-reaction="loved" class="${reaction.loved ? 'selected' : ''}" type="button">${icon('sparkle')} Love</button>
@@ -568,6 +572,13 @@ function viewer(memory) {
       </div>
       ${reaction.emoji || reaction.caption ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
     </aside>`;
+}
+
+function viewerIndex(total, step) {
+  if (state.viewer == null || total <= 1) return null;
+  const next = state.viewer + step;
+  if (next < 0 || next >= total) return null;
+  return next;
 }
 
 function camera() {
@@ -620,6 +631,7 @@ function remainingFor(memory, type) {
 function icon(name) {
   const icons = {
     'chevron-left': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6"/></svg>',
+    'chevron-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
     users: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
@@ -694,6 +706,11 @@ function bind() {
     state.viewer = null;
     render();
   });
+  document.querySelectorAll('[data-viewer-step]').forEach((button) => button.addEventListener('click', () => {
+    moveViewer(Number(button.dataset.viewerStep));
+  }));
+  bindViewerSwipe();
+  bindViewerKeys();
   document.querySelectorAll('[data-react]').forEach((button) => button.addEventListener('click', () => {
     const current = state.reactions.get(button.dataset.react) || {};
     state.reactions.set(button.dataset.react, { ...current, [button.dataset.reaction]: !current[button.dataset.reaction] });
@@ -725,6 +742,55 @@ function bind() {
   const cameraSurface = document.querySelector('.camera');
   cameraSurface?.addEventListener('dblclick', (event) => event.preventDefault());
   cameraSurface?.addEventListener('touchend', preventFastDoubleTap, { passive: false });
+}
+
+function bindViewerSwipe() {
+  const surface = document.querySelector('[data-viewer-swipe]');
+  if (!surface) return;
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+  surface.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    tracking = true;
+    startX = event.clientX;
+    startY = event.clientY;
+  });
+  surface.addEventListener('pointerup', (event) => {
+    if (!tracking) return;
+    tracking = false;
+    const deltaX = event.clientX - startX;
+    const deltaY = event.clientY - startY;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.4) return;
+    moveViewer(deltaX < 0 ? 1 : -1);
+  });
+  surface.addEventListener('pointercancel', () => {
+    tracking = false;
+  });
+}
+
+function bindViewerKeys() {
+  if (state.viewer == null || window.viewerKeyBound) return;
+  window.viewerKeyBound = true;
+  window.addEventListener('keydown', (event) => {
+    if (state.viewer == null) return;
+    if (event.key === 'ArrowLeft') moveViewer(-1);
+    if (event.key === 'ArrowRight') moveViewer(1);
+    if (event.key === 'Escape') {
+      state.viewer = null;
+      render();
+    }
+  });
+}
+
+function moveViewer(step) {
+  const memory = currentMemory();
+  if (!memory || state.viewer == null) return;
+  const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
+  const next = viewerIndex(items.length, step);
+  if (next == null) return;
+  state.viewer = next;
+  render();
 }
 
 function openInvite() {
