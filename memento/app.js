@@ -42,6 +42,7 @@ const state = {
   localCaptures: new Map(),
   albumOpenedAt: new Map(),
   viewer: null,
+  viewerDirection: 0,
   reactions: new Map(),
   showCapturedBy: loadCapturedByPreference(),
   mode: 'photo',
@@ -552,9 +553,10 @@ function viewer(memory) {
   const nextIndex = viewerIndex(items.length, 1);
   const url = mediaUrl(item);
   const reaction = state.reactions.get(item.id) || {};
+  const slideClass = state.viewerDirection < 0 ? ' slide-from-left' : state.viewerDirection > 0 ? ' slide-from-right' : '';
   const media = item.type === 'video'
-    ? `<video class="${reaction.filter || ''}" src="${url}" controls autoplay playsinline></video>`
-    : `<img class="${reaction.filter || ''}" src="${url}" alt="">`;
+    ? `<video class="${`${reaction.filter || ''}${slideClass}`.trim()}" src="${url}" controls autoplay playsinline></video>`
+    : `<img class="${`${reaction.filter || ''}${slideClass}`.trim()}" src="${url}" alt="">`;
   return `
     <aside class="viewer" role="dialog" aria-modal="true">
       <button class="viewer-close" data-close-viewer aria-label="Close">${icon('close')}</button>
@@ -701,10 +703,12 @@ function bind() {
   });
   document.querySelectorAll('[data-open-media]').forEach((button) => button.addEventListener('click', () => {
     state.viewer = Number(button.dataset.openMedia);
+    state.viewerDirection = 0;
     render();
   }));
   document.querySelector('[data-close-viewer]')?.addEventListener('click', () => {
     state.viewer = null;
+    state.viewerDirection = 0;
     render();
   });
   document.querySelectorAll('[data-viewer-step]').forEach((button) => button.addEventListener('click', () => {
@@ -779,6 +783,7 @@ function bindViewerKeys() {
     if (event.key === 'ArrowRight') moveViewer(1);
     if (event.key === 'Escape') {
       state.viewer = null;
+      state.viewerDirection = 0;
       render();
     }
   });
@@ -790,6 +795,7 @@ function moveViewer(step) {
   const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
   const next = viewerIndex(items.length, step);
   if (next == null) return;
+  state.viewerDirection = step;
   state.viewer = next;
   render();
 }
