@@ -118,7 +118,7 @@ async function loadMemories(options = {}) {
   try {
     state.memories = await fetchGuestMementos();
     if (!state.selectedId && state.memories.length) state.selectedId = state.memories[0].id;
-    if (state.inviteCode && state.guest?.mementoId === state.selectedId) state.view = 'detail';
+    if (state.inviteCode && state.guest?.mementoId === state.selectedId) state.view = 'join';
   } catch {
     state.error = 'Could not load Memento data. Please try again later.';
     state.memories = [];
@@ -522,19 +522,22 @@ function join() {
   if (state.error) return quietState('Invite unavailable', state.error, true);
   const memory = currentMemory();
   if (!memory) return emptyState();
-  if (state.guest?.mementoId === memory.id) return detail();
+  const returningGuest = state.guest?.mementoId === memory.id;
+  const photoRemaining = remainingFor(memory, 'photo');
+  const videoRemaining = remainingFor(memory, 'video');
+  const available = `${photoRemaining} ${photoRemaining === 1 ? 'shot' : 'shots'}${memory.videos ? `, ${videoRemaining} ${videoRemaining === 1 ? 'video' : 'videos'}` : ''} available`;
 
   return `
     <section class="join-hero">
       ${appBanner()}
       <div class="join-bg">${imageMarkup(memory, 'join-bg-image')}</div>
-      <form class="join-overlay-card" data-join-form>
+      <form class="join-overlay-card" ${returningGuest ? '' : 'data-join-form'}>
         <p class="invited-by">${icon('users')} Invited by Memento</p>
         <h1>${escapeHtml(memory.title)}</h1>
-        <p class="event-meta">${icon('clock')} ${escapeHtml(memory.reveal)} <span></span> ${icon('camera')} ${memory.shots} shots available</p>
-        <label class="name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required></label>
+        <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
+        ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : `<label class="name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required></label>`}
         ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-        <button class="take-camera" type="submit">Take your camera ${icon('arrow-right')}</button>
+        <button class="take-camera" ${returningGuest ? `type="button" data-view="camera" data-id="${memory.id}"` : 'type="submit"'} ${eventEnded(memory) ? 'disabled' : ''}>${eventEnded(memory) ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
       </form>
     </section>`;
 }
@@ -752,6 +755,19 @@ function eventEnded(memory) {
   return Boolean(memory?.ended || (memory?.endTime && Date.now() >= memory.endTime.getTime()));
 }
 
+function eventTimeLeft(memory) {
+  if (eventEnded(memory)) return 'Ended';
+  const endTime = memory?.endTime?.getTime?.();
+  if (!endTime) return memory?.reveal || 'Time left';
+  const totalMinutes = Math.max(0, Math.ceil((endTime - Date.now()) / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h left`;
+  if (hours > 0) return `${hours}h ${minutes}m left`;
+  return `${minutes}m left`;
+}
+
 function icon(name) {
   const icons = {
     'chevron-left': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6"/></svg>',
@@ -762,6 +778,7 @@ function icon(name) {
     camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>',
     edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 9-9-4-4-9 9-2 6 6-2Z"/><path d="m15 6 4 4"/></svg>',
     'arrow-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
     lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
     menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>',
     'flash-off': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/><path d="m2 2 20 20"/></svg>',
