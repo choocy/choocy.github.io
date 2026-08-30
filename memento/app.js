@@ -471,7 +471,7 @@ function enterImmersiveMode() {
 }
 
 function topbar() {
-  if (['invite', 'loading'].includes(state.view)) return '';
+  if (['invite', 'loading', 'join'].includes(state.view)) return '';
   const showMenu = state.guest?.name && ['home', 'detail'].includes(state.view);
   return `
     <header class="topbar">
@@ -860,7 +860,7 @@ function updateCameraMode() {
 function render() {
   const app = document.getElementById('app');
   const page = state.view === 'invite' ? invite() : state.view === 'loading' ? loading() : state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
-  app.innerHTML = (state.view === 'camera' ? '' : topbar()) + page;
+  app.innerHTML = topbar() + page;
   bind();
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
   document.documentElement.classList.toggle('viewer-open', state.viewer != null);
