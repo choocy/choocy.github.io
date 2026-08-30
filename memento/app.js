@@ -533,13 +533,17 @@ function join() {
     <section class="join-hero">
       ${appBanner()}
       <div class="join-bg">${imageMarkup(memory, 'join-bg-image')}</div>
-      <form class="join-overlay-card" ${returningGuest ? '' : 'data-join-form'}>
-        <p class="invited-by">${icon('users')} Invited by Memento</p>
-        <h1>${escapeHtml(memory.title)}</h1>
-        <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
-        ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : `<label class="name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required></label>`}
-        ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-        <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="submit"'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+      <form class="join-overlay-card ${returningGuest ? 'returning' : ''}" ${returningGuest ? '' : 'data-join-form'}>
+        <div class="join-event-copy">
+          <p class="invited-by">${icon('users')} Invited by Memento</p>
+          <h1>${escapeHtml(memory.title)}</h1>
+          <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
+        </div>
+        <div class="join-bottom-actions">
+          ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : `<label class="name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required></label>`}
+          ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+          <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="submit"'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+        </div>
       </form>
     </section>`;
 }
