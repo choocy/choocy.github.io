@@ -301,7 +301,9 @@ function currentParticipantName() {
 async function hydrateCoverImages(renderWhenDone = true) {
   const paths = [];
   await Promise.all(state.memories.map(async (memory) => {
-    if (memory.coverPath && !state.coverUrls.has(memory.id)) {
+    if (memory.coverPath && state.coverUrls.has(memory.id)) {
+      memory.cover = state.coverUrls.get(memory.id);
+    } else if (memory.coverPath) {
       const url = await storageObjectUrl(memory.coverPath);
       if (url) {
         state.coverUrls.set(memory.id, url);
@@ -1384,12 +1386,16 @@ async function uploadCapture(memory, item, blob, contentType) {
   const extension = contentType.includes('video') ? videoExtension(contentType) : 'jpg';
   const uploadType = item.type === 'video' ? 'video/mp4' : contentType;
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
+  const thumbnailPath = `mementos/${memory.id}/thumbs/${item.id}.jpg`;
+  const thumbnailBlob = await generateBlurredThumbnail(item, blob).catch(() => null);
+  if (thumbnailBlob) await uploadStorageObject(thumbnailPath, thumbnailBlob, 'image/jpeg');
   await uploadStorageObject(storagePath, blob, uploadType);
   await supabaseInsert('media_items?select=id', {
     memento_id: memory.id,
     member_id: state.guest.memberId,
     media_type: item.type,
     original_path: storagePath,
+    thumbnail_path: thumbnailBlob ? thumbnailPath : null,
     captured_by_name: item.capturedByName || currentParticipantName(),
     file_size_bytes: blob.size,
     duration_seconds: item.type === 'video' ? memory.videoLength : null,
@@ -1404,6 +1410,58 @@ async function uploadCapture(memory, item, blob, contentType) {
     memory.ownUploadedVideos += 1;
   }
   markCapture(memory.id, item.id, 'Uploaded');
+}
+
+async function generateBlurredThumbnail(item, blob) {
+  if (item.type === 'video') {
+    const url = item.localUrl || URL.createObjectURL(blob);
+    try {
+      return await generateVideoPosterBlob(url, true);
+    } finally {
+      if (!item.localUrl) URL.revokeObjectURL(url);
+    }
+  }
+  if ('createImageBitmap' in window) {
+    const bitmap = await createImageBitmap(blob);
+    try {
+      return imageSourceToThumbnailBlob(bitmap, bitmap.width, bitmap.height, true);
+    } finally {
+      bitmap.close?.();
+    }
+  }
+  const url = item.localUrl || URL.createObjectURL(blob);
+  try {
+    const image = await loadImage(url);
+    return imageSourceToThumbnailBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height, true);
+  } finally {
+    if (!item.localUrl) URL.revokeObjectURL(url);
+  }
+}
+
+function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred = false) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 240;
+  canvas.height = 300;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas unavailable');
+  if (blurred) context.filter = 'blur(10px) saturate(.82) brightness(.72)';
+  drawCover(context, source, sourceWidth, sourceHeight, canvas.width, canvas.height);
+  return new Promise((resolve) => {
+    if (canvas.toBlob) {
+      canvas.toBlob((blob) => resolve(blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.62))), 'image/jpeg', 0.62);
+    } else {
+      resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.62)));
+    }
+  });
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Could not load image'));
+    image.src = url;
+  });
 }
 
 function videoExtension(contentType) {
@@ -1433,7 +1491,12 @@ function videoDuration(file) {
   });
 }
 
-function generateVideoPoster(url) {
+async function generateVideoPoster(url) {
+  const blob = await generateVideoPosterBlob(url, false);
+  return blobToDataUrl(blob);
+}
+
+function generateVideoPosterBlob(url, blurred = false) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
@@ -1443,15 +1506,20 @@ function generateVideoPoster(url) {
       const width = video.videoWidth || 640;
       const height = video.videoHeight || 360;
       const canvas = document.createElement('canvas');
-      canvas.width = 720;
-      canvas.height = 900;
+      canvas.width = blurred ? 240 : 720;
+      canvas.height = blurred ? 300 : 900;
       const context = canvas.getContext('2d');
       if (!context) {
         reject(new Error('Canvas unavailable'));
         return;
       }
+      if (blurred) context.filter = 'blur(10px) saturate(.82) brightness(.72)';
       drawCover(context, video, width, height, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.78));
+      if (canvas.toBlob) {
+        canvas.toBlob((blob) => resolve(blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', blurred ? 0.62 : 0.78))), 'image/jpeg', blurred ? 0.62 : 0.78);
+      } else {
+        resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', blurred ? 0.62 : 0.78)));
+      }
     };
     video.onloadeddata = capture;
     video.onloadedmetadata = () => {
@@ -1459,6 +1527,15 @@ function generateVideoPoster(url) {
     };
     video.onerror = () => reject(new Error('Could not create video thumbnail'));
     video.src = url;
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read thumbnail'));
+    reader.readAsDataURL(blob);
   });
 }
 

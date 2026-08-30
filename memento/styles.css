@@ -150,7 +150,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .detail { display: grid; grid-template-columns: minmax(280px, .65fr) minmax(0, 1fr); gap: 22px; align-items: start; }
 .detail-cover { position: sticky; top: 82px; border-radius: 8px; overflow: hidden; background: #111; }
 .hero-cover { aspect-ratio: 4 / 5; border-radius: 8px; }
-.detail-overlay { position: absolute; left: 14px; right: 14px; top: 14px; display: grid; gap: 7px; padding: 14px; border-radius: 7px; background: rgb(0 0 0 / 55%); color: white; backdrop-filter: blur(16px); }
+.detail-overlay { position: absolute; left: 14px; right: 14px; bottom: 14px; display: grid; gap: 7px; padding: 14px; border-radius: 7px; background: rgb(0 0 0 / 55%); color: white; backdrop-filter: blur(16px); }
 .detail-overlay h2 { color: white; }
 .detail-overlay p { margin: 0; color: rgb(255 255 255 / 76%); font-size: 14px; }
 .detail-body { display: grid; gap: 14px; }
@@ -167,10 +167,10 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .media-tile small { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 4px; background: rgb(0 0 0 / 48%); color: white; font-size: 10px; text-align: center; }
 .media-tile.locked { background: #151515; }
 .media-tile.locked small { display: none; }
-.locked-preview { filter: blur(14px) saturate(.8) brightness(.58); transform: scale(1.08); }
+.locked-preview { filter: brightness(.7); transform: scale(1.01); }
 .locked-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: rgb(255 255 255 / 42%); background: linear-gradient(135deg, #191919, #252525); }
 .locked-placeholder svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
-.locked-label { position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 3; padding: 5px 7px; border-radius: 999px; background: rgb(0 0 0 / 52%); color: white; font-size: 10px; font-weight: 650; line-height: 1.15; text-align: center; backdrop-filter: blur(12px); }
+.locked-label { position: absolute; left: 50%; top: 50%; z-index: 3; width: max-content; max-width: calc(100% - 14px); transform: translate(-50%, -50%); padding: 5px 8px; border-radius: 999px; background: rgb(0 0 0 / 52%); color: white; font-size: 10px; font-weight: 650; line-height: 1.15; text-align: center; backdrop-filter: blur(12px); }
 .captured-pill { position: absolute; left: 6px; bottom: 28px; z-index: 2; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-radius: 999px; background: rgb(0 0 0 / 42%); color: white; font-size: 10px; font-weight: 650; line-height: 1; backdrop-filter: blur(12px); }
 .media-tile .play { position: absolute; inset: 0; display: grid; place-items: center; color: white; }
 .media-tile .play svg { width: 34px; height: 34px; fill: rgb(255 255 255 / 88%); stroke: none; filter: drop-shadow(0 2px 8px rgb(0 0 0 / 60%)); }
