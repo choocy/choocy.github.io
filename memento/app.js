@@ -527,7 +527,7 @@ function join() {
   const videoRemaining = remainingFor(memory, 'video');
   const available = `${photoRemaining} ${photoRemaining === 1 ? 'shot' : 'shots'}${memory.videos ? `, ${videoRemaining} ${videoRemaining === 1 ? 'video' : 'videos'}` : ''} available`;
   const ended = eventEnded(memory);
-  const actionText = `View gallery ${icon('arrow-right')}`;
+  const actionText = `Continue to event ${icon('arrow-right')}`;
 
   return `
     <section class="join-hero">
