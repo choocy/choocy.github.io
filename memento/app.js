@@ -666,11 +666,12 @@ function guestGallery(memory) {
       <div class="gallery-controls"><span>${escapeHtml(momentLabel)}</span><label class="name-toggle">Names <input type="checkbox" data-captured-toggle ${state.showCapturedBy ? 'checked' : ''}></label></div>
     </div>`;
   if (!items.length) return `${toggle}<section class="guest-gallery empty-gallery"><p>No moments yet.</p></section>`;
-  return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index)).join('')}</section>`;
+  return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index, memory)).join('')}</section>`;
 }
 
-function mediaTile(item, index) {
+function mediaTile(item, index, memory) {
   const url = mediaUrl(item);
+  const style = unlockedMediaFilter(item, memory);
   const capturedBy = !item.locked && state.showCapturedBy && item.capturedByName
     ? `<span class="captured-pill">${escapeHtml(item.capturedByName)}</span>`
     : '';
@@ -679,7 +680,7 @@ function mediaTile(item, index) {
     ? `${url ? `<img class="locked-preview" src="${url}" loading="lazy" alt="">` : `<span class="locked-placeholder">${icon('lock')}</span>`}`
     : item.type === 'video'
     ? `${item.posterUrl ? `<img src="${item.posterUrl}" loading="lazy" alt="">` : `<video src="${url}" muted playsinline preload="metadata"></video>`}<span class="play">${icon('play')}</span>`
-    : `<img src="${url}" loading="lazy" alt="">`;
+    : `<img src="${url}" loading="lazy" alt="" style="${style}">`;
   return `<button class="media-tile ${item.locked ? 'locked' : ''}" data-open-media="${index}" type="button">${media}${locked}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
 }
 
@@ -697,9 +698,9 @@ function viewer(memory) {
   const outgoingReaction = outgoingItem ? state.reactions.get(outgoingItem.id) || {} : {};
   const outgoingClass = state.viewerDirection < 0 ? 'viewer-frame exit-right' : state.viewerDirection > 0 ? 'viewer-frame exit-left' : '';
   const outgoingMedia = outgoingItem && state.viewerDirection
-    ? viewerMediaElement(outgoingItem, mediaUrl(outgoingItem), outgoingReaction, outgoingClass, false)
+    ? viewerMediaElement(outgoingItem, mediaUrl(outgoingItem), outgoingReaction, outgoingClass, false, memory)
     : '';
-  const media = `${outgoingMedia}${viewerMediaElement(item, url, reaction, incomingClass, true)}`;
+  const media = `${outgoingMedia}${viewerMediaElement(item, url, reaction, incomingClass, true, memory)}`;
   return `
     <aside class="viewer" role="dialog" aria-modal="true">
       <button class="viewer-close" data-close-viewer aria-label="Close">${icon('close')}</button>
@@ -719,8 +720,9 @@ function viewer(memory) {
     </aside>`;
 }
 
-function viewerMediaElement(item, url, reaction, className, active) {
+function viewerMediaElement(item, url, reaction, className, active, memory) {
   const classes = `${className} ${reaction.filter || ''}`.trim();
+  const style = unlockedMediaFilter(item, memory, reaction);
   if (item.locked) {
     const preview = url
       ? `<img class="${classes} locked-preview" src="${url}" alt="">`
@@ -729,7 +731,14 @@ function viewerMediaElement(item, url, reaction, className, active) {
   }
   return item.type === 'video'
     ? `<video class="${classes}" src="${url}" ${active ? 'controls autoplay' : 'muted'} playsinline></video>`
-    : `<img class="${classes}" src="${url}" alt="">`;
+    : `<img class="${classes}" src="${url}" alt="" style="${style}">`;
+}
+
+function unlockedMediaFilter(item, memory, reaction = {}) {
+  if (reaction.filter) return '';
+  if (!memory || item.locked || item.type !== 'photo') return '';
+  const filter = filterForStyle(memory);
+  return filter === filters.Original ? '' : `filter:${filter}`;
 }
 
 function viewerIndex(total, step) {
@@ -749,7 +758,7 @@ function camera() {
   const ended = eventEnded(memory);
   return `
     <section class="camera ${ended ? 'ended' : ''}">
-      <video autoplay playsinline muted ${ended ? 'hidden' : ''} style="filter:${filterForStyle(memory)}"></video>
+      <video autoplay playsinline muted ${ended ? 'hidden' : ''}></video>
       <div class="camera-scrim"></div>
       <div class="camera-label">${ended ? 'Memento has ended' : 'Camera preview'}</div>
       <div class="camera-top">
@@ -1249,7 +1258,7 @@ function startCamera() {
     if (photos <= 0) return;
     event.currentTarget.disabled = true;
     try {
-      const photo = await capturePhoto(video, memory);
+      const photo = await capturePhoto(video);
       photos = Math.max(0, photos - 1);
       const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), capturedAt: Date.now(), sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
@@ -1328,15 +1337,8 @@ function toggleFlash() {
   if (button) button.innerHTML = icon(flashMode ? 'flash' : 'flash-off');
 }
 
-async function capturePhoto(video, memory) {
+async function capturePhoto(video) {
   await ensureCameraReady(video);
-  const filter = filterForStyle(memory);
-  if (filter !== filters.Original) {
-    const settings = activeTrack?.getSettings?.() || {};
-    const width = video.videoWidth || settings.width || 1280;
-    const height = video.videoHeight || settings.height || 720;
-    return canvasPhotoFromSource(video, width, height, filter);
-  }
   if (activeTrack && typeof ImageCapture !== 'undefined') {
     try {
       const imageCapture = new ImageCapture(activeTrack);
