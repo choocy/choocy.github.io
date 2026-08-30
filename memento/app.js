@@ -118,7 +118,7 @@ async function loadMemories(options = {}) {
   try {
     state.memories = await fetchGuestMementos();
     if (!state.selectedId && state.memories.length) state.selectedId = state.memories[0].id;
-    if (state.inviteCode && state.guest?.mementoId === state.selectedId) state.view = 'join';
+    if (state.inviteCode && state.guest?.mementoId === state.selectedId && ['invite', 'loading', 'home'].includes(state.view)) state.view = 'join';
   } catch {
     state.error = 'Could not load Memento data. Please try again later.';
     state.memories = [];
@@ -527,8 +527,7 @@ function join() {
   const videoRemaining = remainingFor(memory, 'video');
   const available = `${photoRemaining} ${photoRemaining === 1 ? 'shot' : 'shots'}${memory.videos ? `, ${videoRemaining} ${videoRemaining === 1 ? 'video' : 'videos'}` : ''} available`;
   const ended = eventEnded(memory);
-  const returningActionView = ended ? 'detail' : 'camera';
-  const actionText = ended ? `View gallery ${icon('arrow-right')}` : `Take your camera ${icon('arrow-right')}`;
+  const actionText = `View gallery ${icon('arrow-right')}`;
 
   return `
     <section class="join-hero">
@@ -540,7 +539,7 @@ function join() {
         <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
         ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : `<label class="name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required></label>`}
         ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-        <button class="take-camera" ${returningGuest ? `type="button" data-view="${returningActionView}" data-id="${memory.id}"` : 'type="submit"'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : actionText}</button>
+        <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="submit"'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
       </form>
     </section>`;
 }
