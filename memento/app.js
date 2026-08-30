@@ -152,12 +152,13 @@ function mapMemory(row, members = [], media = []) {
   const start = parseDate(row.start_time);
   const end = parseDate(row.end_time);
   const revealTime = parseDate(row.reveal_time) || end;
-  const guestMedia = state.guest?.memberId ? media.filter((item) => item.member_id === state.guest.memberId) : [];
+  const currentName = normalizeName(currentParticipantName());
+  const guestMedia = currentName ? media.filter((item) => mediaCapturedByName(item) === currentName) : [];
   const revealMode = String(row.reveal_mode || '').toLowerCase();
   const revealed = revealMode === 'live' || (revealTime && Date.now() >= revealTime.getTime());
   const ended = end ? Date.now() >= end.getTime() : false;
-  const ownOnlyAfterReveal = Boolean(row.only_you_can_see_after_reveal ?? row.only_own_media_after_reveal ?? row.is_private_gallery ?? row.private_gallery);
-  const visibleMedia = media.filter((item) => isMediaVisibleForMemory(item, revealed, ownOnlyAfterReveal));
+  const sharedGallery = Boolean(row.host_preview_before_reveal);
+  const visibleMedia = media.filter((item) => isMediaVisibleForMemory(item, { revealed, sharedGallery }));
 
   return {
     id: row.id,
@@ -175,40 +176,47 @@ function mapMemory(row, members = [], media = []) {
     revealed,
     reveal: revealLabel(row.reveal_mode, revealTime),
     revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later',
-    ownOnlyAfterReveal,
-    canHostPreview: Boolean(row.host_preview_before_reveal),
+    sharedGallery,
     guestLimit: numberValue(row.guest_limit, 0),
     joined: members.length,
     uploadedPhotos: visibleMedia.filter((item) => item.media_type === 'photo').length,
     uploadedVideos: visibleMedia.filter((item) => item.media_type === 'video').length,
     ownUploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
     ownUploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
-    media: visibleMedia.map((item) => mapMediaItem(item, { revealed, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
+    media: visibleMedia.map((item) => mapMediaItem(item, { revealed, sharedGallery, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
     memberNames: members.map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
   };
 }
 
-function isMediaVisibleForMemory(row, revealed, ownOnlyAfterReveal) {
-  if (!state.guest?.memberId) return true;
-  if (!revealed) return true;
-  if (!ownOnlyAfterReveal) return true;
-  return row.member_id === state.guest.memberId;
+function isMediaVisibleForMemory(row, memory = {}) {
+  if (isOwnMedia(row)) return true;
+  if (!memory.sharedGallery) return false;
+  return true;
 }
 
 function mapMediaItem(row, memory = {}) {
-  const isCurrentParticipant = state.guest?.memberId && row.member_id === state.guest.memberId;
+  const isCurrentParticipant = isOwnMedia(row);
   return {
     id: row.id,
     type: row.media_type === 'video' ? 'video' : 'photo',
     path: row.thumbnail_path || '',
     originalPath: row.original_path,
-    locked: !memory.revealed && !isCurrentParticipant,
+    locked: memory.sharedGallery && !memory.revealed && !isCurrentParticipant,
     revealLabel: `Reveals ${memory.revealAtLabel || 'later'}`,
     capturedByName: row.captured_by_name || (isCurrentParticipant ? currentParticipantName() : ''),
     sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
   };
+}
+
+function isOwnMedia(row) {
+  const currentName = normalizeName(currentParticipantName());
+  return Boolean(currentName && mediaCapturedByName(row) === currentName);
+}
+
+function mediaCapturedByName(row) {
+  return normalizeName(row.captured_by_name || row.capturedByName || '');
 }
 
 function parseDate(value) {
@@ -223,7 +231,26 @@ function numberValue(value, fallback) {
 
 function styleName(value) {
   if (!value) return 'Original';
-  const match = Object.keys(filters).find((name) => name.toLowerCase() === String(value).toLowerCase());
+  const normalized = String(value).trim().toLowerCase().replace(/[_-]+/g, ' ');
+  const aliases = {
+    original: 'Original',
+    none: 'Original',
+    clean: 'Clean Warm',
+    'clean warm': 'Clean Warm',
+    warm: 'Clean Warm',
+    film: 'Soft Film',
+    'soft film': 'Soft Film',
+    kodak: 'Kodak-like',
+    'kodak like': 'Kodak-like',
+    polaroid: 'Polaroid-like',
+    'polaroid like': 'Polaroid-like',
+    mono: 'Mono',
+    monochrome: 'Mono',
+    blackwhite: 'Mono',
+    'black white': 'Mono',
+  };
+  if (aliases[normalized]) return aliases[normalized];
+  const match = Object.keys(filters).find((name) => name.toLowerCase() === normalized);
   return match || 'Original';
 }
 
@@ -363,9 +390,13 @@ function escapeHtml(value) {
 }
 
 function imageMarkup(memory, className = '') {
-  const filter = filters[memory.style] || filters.Original;
+  const filter = filterForStyle(memory);
   if (!memory.cover) return `<div class="cover-placeholder ${className}"><span>${escapeHtml(memory.title)}</span></div>`;
   return `<img class="${className}" src="${memory.cover}" alt="" style="filter:${filter}">`;
+}
+
+function filterForStyle(memory) {
+  return filters[memory?.style] || filters.Original;
 }
 
 function mediaUrl(item) {
@@ -718,7 +749,7 @@ function camera() {
   const ended = eventEnded(memory);
   return `
     <section class="camera ${ended ? 'ended' : ''}">
-      <video autoplay playsinline muted ${ended ? 'hidden' : ''}></video>
+      <video autoplay playsinline muted ${ended ? 'hidden' : ''} style="filter:${filterForStyle(memory)}"></video>
       <div class="camera-scrim"></div>
       <div class="camera-label">${ended ? 'Memento has ended' : 'Camera preview'}</div>
       <div class="camera-top">
@@ -1218,7 +1249,7 @@ function startCamera() {
     if (photos <= 0) return;
     event.currentTarget.disabled = true;
     try {
-      const photo = await capturePhoto(video);
+      const photo = await capturePhoto(video, memory);
       photos = Math.max(0, photos - 1);
       const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), capturedAt: Date.now(), sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
@@ -1297,8 +1328,15 @@ function toggleFlash() {
   if (button) button.innerHTML = icon(flashMode ? 'flash' : 'flash-off');
 }
 
-async function capturePhoto(video) {
+async function capturePhoto(video, memory) {
   await ensureCameraReady(video);
+  const filter = filterForStyle(memory);
+  if (filter !== filters.Original) {
+    const settings = activeTrack?.getSettings?.() || {};
+    const width = video.videoWidth || settings.width || 1280;
+    const height = video.videoHeight || settings.height || 720;
+    return canvasPhotoFromSource(video, width, height, filter);
+  }
   if (activeTrack && typeof ImageCapture !== 'undefined') {
     try {
       const imageCapture = new ImageCapture(activeTrack);
@@ -1323,12 +1361,13 @@ async function capturePhoto(video) {
   return canvasPhotoFromSource(video, width, height);
 }
 
-async function canvasPhotoFromSource(source, width, height) {
+async function canvasPhotoFromSource(source, width, height, filter = filters.Original) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas unavailable');
+  context.filter = filter;
   context.drawImage(source, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => {
     if (canvas.toBlob) {
@@ -1507,7 +1546,7 @@ async function uploadCapture(memory, item, blob, contentType) {
     file_size_bytes: blob.size,
     duration_seconds: item.type === 'video' ? memory.videoLength : null,
     uploaded_at: new Date().toISOString(),
-    approval_status: memory.canHostPreview ? 'approved' : 'pending',
+    approval_status: memory.sharedGallery ? 'approved' : 'pending',
   });
   if (item.type === 'photo') {
     memory.uploadedPhotos += 1;
