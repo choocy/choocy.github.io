@@ -221,6 +221,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .camera video { width: 100%; height: 100%; object-fit: cover; }
 .camera-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgb(0 0 0 / 72%), rgb(0 0 0 / 5%) 24%, rgb(0 0 0 / 8%) 58%, rgb(0 0 0 / 76%)); }
 .camera-label { top: 50%; left: 50%; right: auto; z-index: 2; transform: translate(-50%, -50%); width: max-content; max-width: calc(100% - 40px); background: rgb(0 0 0 / 34%); opacity: .72; font-size: 12px; }
+.camera.ended .camera-label { z-index: 4; padding: 10px 14px; background: rgb(0 0 0 / 58%); color: white; opacity: 1; font-size: 15px; font-weight: 700; }
 .light { position: absolute; top: 18px; right: 18px; z-index: 2; background: rgb(255 255 255 / 12%); color: white; border-color: rgb(255 255 255 / 24%); }
 .unsupported { position: absolute; bottom: 112px; color: white; background: rgb(0 0 0 / 45%); padding: 8px 10px; border-radius: 5px; }
 .camera-top { position: absolute; left: 0; right: 0; top: max(28px, env(safe-area-inset-top)); z-index: 3; display: grid; grid-template-columns: 72px minmax(0, 1fr) 104px; align-items: start; padding: 20px 22px 0; }

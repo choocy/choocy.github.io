@@ -51,6 +51,7 @@ const state = {
   recordingSecondsLeft: 0,
 };
 let revealRefreshTimer = null;
+let eventRefreshTimer = null;
 
 function headers() {
   return {
@@ -109,10 +110,10 @@ async function uploadStorageObject(path, blob, contentType) {
   return path;
 }
 
-async function loadMemories() {
+async function loadMemories(options = {}) {
   state.loading = true;
   state.error = '';
-  render();
+  if (!options.quiet) render();
 
   try {
     state.memories = await fetchGuestMementos();
@@ -126,6 +127,7 @@ async function loadMemories() {
     state.loading = false;
     await hydrateCoverImages(false);
     scheduleRevealRefresh();
+    scheduleEventRefresh();
     render();
   }
 }
@@ -153,6 +155,7 @@ function mapMemory(row, members = [], media = []) {
   const guestMedia = state.guest?.memberId ? media.filter((item) => item.member_id === state.guest.memberId) : [];
   const revealMode = String(row.reveal_mode || '').toLowerCase();
   const revealed = revealMode === 'live' || (revealTime && Date.now() >= revealTime.getTime());
+  const ended = end ? Date.now() >= end.getTime() : false;
   const ownOnlyAfterReveal = Boolean(row.only_you_can_see_after_reveal ?? row.only_own_media_after_reveal ?? row.is_private_gallery ?? row.private_gallery);
   const visibleMedia = media.filter((item) => isMediaVisibleForMemory(item, revealed, ownOnlyAfterReveal));
 
@@ -161,6 +164,8 @@ function mapMemory(row, members = [], media = []) {
     title: row.title || 'Untitled Memento',
     date: formatDateTime(start),
     end: formatDateTime(end),
+    endTime: end,
+    ended,
     style: styleName(row.photo_style),
     shots: numberValue(row.shots_per_guest, 0),
     videos: numberValue(row.videos_per_guest, 0),
@@ -392,10 +397,39 @@ function scheduleRevealRefresh() {
   }, Math.min(nextReveal + 1000, 2147483647));
 }
 
+function scheduleEventRefresh() {
+  window.clearTimeout(eventRefreshTimer);
+  const nextEnd = state.memories
+    .filter((memory) => !memory.ended && memory.endTime)
+    .map((memory) => memory.endTime.getTime() - Date.now())
+    .filter((delayMs) => delayMs > 0)
+    .sort((a, b) => a - b)[0];
+  const delay = nextEnd ? Math.min(nextEnd + 1000, 2147483647) : 60000;
+  eventRefreshTimer = window.setTimeout(() => {
+    if (state.view !== 'camera') {
+      loadMemories();
+      return;
+    }
+    refreshCurrentEventState();
+  }, delay);
+}
+
+async function refreshCurrentEventState() {
+  const currentId = state.selectedId;
+  await loadMemories({ quiet: true });
+  if (currentId) state.selectedId = currentId;
+  const memory = currentMemory();
+  if (state.view === 'camera' && memory?.ended) {
+    stopCamera();
+    render();
+  }
+}
+
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && state.view !== 'camera') {
+  if (document.visibilityState === 'visible') {
     state.mediaUrls.clear();
-    loadMemories();
+    if (state.view === 'camera') refreshCurrentEventState();
+    else loadMemories();
   }
 });
 
@@ -506,19 +540,20 @@ function join() {
 }
 
 function memoryCard(memory) {
+  const actions = memory.ended ? '<p class="event-status">Memento has ended</p>' : `${cameraSupported() ? `<button class="ink light-ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory, 'ghost light-ghost')}`;
   return `
     <article class="memory-card cover-card">
       <button class="image-button" data-view="detail" data-id="${memory.id}">${imageMarkup(memory)}</button>
       <div class="card-overlay">
         <h2>${escapeHtml(memory.title)}</h2>
         <p>Starts ${escapeHtml(memory.date)}<br>Ends ${escapeHtml(memory.end)}</p>
-        <div class="actions">${cameraSupported() ? `<button class="ink light-ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory, 'ghost light-ghost')}</div>
+        <div class="actions">${actions}</div>
       </div>
     </article>`;
 }
 
 function albumAction(memory, buttonClass = 'ghost') {
-  if (!FEATURES.albumImport) return '';
+  if (!FEATURES.albumImport || memory.ended) return '';
   return `<button class="${buttonClass}" data-open-album data-id="${memory.id}" type="button">Album</button><input class="album-input" type="file" accept="image/*,video/*" hidden data-local-import data-album-input data-id="${memory.id}">`;
 }
 
@@ -553,6 +588,7 @@ function summary(memory) {
 function detail() {
   const memory = currentMemory();
   if (!memory) return emptyState();
+  const actions = memory.ended ? '<p class="event-status">Memento has ended</p>' : `${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory)}`;
 
   return `
     <section class="page detail">
@@ -561,7 +597,7 @@ function detail() {
         ${summary(memory)}
       </div>
       <div class="detail-body">
-        <div class="actions detail-actions">${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory)}</div>
+        <div class="actions detail-actions">${actions}</div>
         ${state.galleryNotice ? `<p class="gallery-notice">${escapeHtml(state.galleryNotice)}</p>` : ''}
         ${guestGallery(memory)}
       </div>
@@ -670,27 +706,28 @@ function camera() {
   const videos = remainingFor(memory, 'video');
   const currentRemaining = state.mode === 'video' ? videos : photos;
   const joined = state.guest?.mementoId === memory.id ? Math.max(memory.joined, 1) : memory.joined;
+  const ended = eventEnded(memory);
   return `
-    <section class="camera">
-      <video autoplay playsinline muted></video>
+    <section class="camera ${ended ? 'ended' : ''}">
+      <video autoplay playsinline muted ${ended ? 'hidden' : ''}></video>
       <div class="camera-scrim"></div>
-      <div class="camera-label">Camera preview</div>
+      <div class="camera-label">${ended ? 'Memento has ended' : 'Camera preview'}</div>
       <div class="camera-top">
         <button class="camera-back" data-view="detail" data-id="${memory.id}" aria-label="Back">${icon('chevron-left')}</button>
         <div class="camera-title"><strong>${escapeHtml(memory.title)}</strong><span>${icon('users')} ${joined}<i></i>${icon('clock')} ${escapeHtml(memory.reveal)}</span></div>
         <div class="remaining-counter"><strong data-remaining>${currentRemaining}</strong><span data-remaining-label>${remainingLabel(currentRemaining, state.mode)}</span></div>
       </div>
-      <div class="capture-mode">
+      <div class="capture-mode" ${ended ? 'hidden' : ''}>
         <button class="${state.mode === 'photo' ? 'selected' : ''}" data-mode="photo" type="button">Photo</button>
         <button class="${state.mode === 'video' ? 'selected' : ''}" data-mode="video" type="button">Video</button>
       </div>
-      <div class="zoom-strip" data-zoom-strip>
+      <div class="zoom-strip" data-zoom-strip ${ended ? 'hidden' : ''}>
         <button data-zoom-choice="0.5">0.5</button>
         <button class="selected" data-zoom-choice="1">1</button>
         <button data-zoom-choice="2">2</button>
         <button data-zoom-choice="5">5</button>
       </div>
-      <div class="camera-bottom">
+      <div class="camera-bottom" ${ended ? 'hidden' : ''}>
         ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : '<div class="last-shot import-tile" aria-hidden="true"><img alt=""><span></span></div>'}
         <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
         <div class="tool-stack">
@@ -704,10 +741,15 @@ function camera() {
 }
 
 function remainingFor(memory, type) {
+  if (eventEnded(memory)) return 0;
   const local = (state.localCaptures.get(memory.id) || []).filter((item) => item.type === type && item.sync !== 'Uploaded').length;
   const uploaded = type === 'photo' ? memory.ownUploadedPhotos : memory.ownUploadedVideos;
   const limit = type === 'photo' ? memory.shots : memory.videos;
   return Math.max(limit - uploaded - local, 0);
+}
+
+function eventEnded(memory) {
+  return Boolean(memory?.ended || (memory?.endTime && Date.now() >= memory.endTime.getTime()));
 }
 
 function icon(name) {
@@ -961,6 +1003,13 @@ async function importLocalMedia(event) {
   const memory = currentMemory();
   const file = event.target.files?.[0];
   if (!memory || !file) return;
+  if (eventEnded(memory)) {
+    state.galleryNotice = 'Memento has ended';
+    state.albumOpenedAt.delete(memory.id);
+    event.target.value = '';
+    render();
+    return;
+  }
   const type = file.type.startsWith('video/') ? 'video' : 'photo';
   state.galleryNotice = '';
   if (looksLikeFreshCameraCapture(file, memory.id)) {
@@ -1007,13 +1056,14 @@ async function importLocalMedia(event) {
     localUrl,
     posterUrl,
     capturedByName: currentParticipantName(),
+    capturedAt: Date.now(),
     sync: 'Syncing',
   });
   if (state.view === 'camera') {
     showLastShot(item.localUrl, 'Syncing', type);
     updateCameraMode();
   }
-  uploadCapture(memory, item, file, file.type || 'application/octet-stream').catch(() => markCapture(memory.id, item.id, 'Retry'));
+  uploadCapture(memory, item, file, file.type || 'application/octet-stream').catch((error) => handleUploadFailure(memory, item, error));
   state.albumOpenedAt.delete(memory.id);
   event.target.value = '';
 }
@@ -1076,7 +1126,7 @@ function markCapture(memoryId, itemId, sync) {
   if (sync === 'Uploaded' && memory && !memory.revealed) {
     state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
     updateLastShotStatus(sync);
-    loadMemories();
+    loadMemories({ quiet: state.view === 'camera' });
     return;
   }
   const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
@@ -1086,6 +1136,11 @@ function markCapture(memoryId, itemId, sync) {
   if (state.view !== 'camera') render();
 }
 
+function handleUploadFailure(memory, item, error) {
+  const ended = error?.message === 'Memento has ended';
+  markCapture(memory.id, item.id, ended ? 'Ended' : 'Retry');
+}
+
 let activeStream = null;
 let facingMode = 'environment';
 let activeTrack = null;
@@ -1093,12 +1148,18 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let flashMode = false;
 let viewerAnimationTimer = null;
+let recordingStartedAt = 0;
 
 function startCamera() {
   const memory = currentMemory();
   const video = document.querySelector('video');
   const label = document.querySelector('.camera-label');
   if (!memory || !video || !label) return;
+  if (eventEnded(memory)) {
+    stopCamera();
+    label.textContent = 'Memento has ended';
+    return;
+  }
 
   openCameraStream(video, label);
 
@@ -1110,6 +1171,12 @@ function startCamera() {
   document.querySelector('[data-flash]')?.addEventListener('click', () => toggleFlash());
 
   document.querySelector('[data-shutter]')?.addEventListener('click', async (event) => {
+    if (eventEnded(memory)) {
+      stopCamera();
+      label.textContent = 'Memento has ended';
+      updateCameraMode();
+      return;
+    }
     if (state.mode === 'video') {
       const videos = remainingFor(memory, 'video');
       if (videos <= 0) return;
@@ -1130,10 +1197,10 @@ function startCamera() {
     try {
       const photo = await capturePhoto(video);
       photos = Math.max(0, photos - 1);
-      const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), sync: 'Syncing' });
+      const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), capturedAt: Date.now(), sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
       updateRemaining(photos, state.mode);
-      uploadCapture(memory, item, photo.blob, 'image/jpeg').catch(() => markCapture(memory.id, item.id, 'Retry'));
+      uploadCapture(memory, item, photo.blob, 'image/jpeg').catch((error) => handleUploadFailure(memory, item, error));
     } catch (error) {
       label.textContent = `Could not capture photo${error?.message ? `: ${error.message}` : ''}`;
     } finally {
@@ -1321,6 +1388,10 @@ function drawCover(context, source, sourceWidth, sourceHeight, targetWidth, targ
 }
 
 function startRecordingVideo(memory, onDone) {
+  if (eventEnded(memory)) {
+    document.querySelector('.camera-label').textContent = 'Memento has ended';
+    return;
+  }
   if (!activeStream || typeof MediaRecorder === 'undefined') {
     document.querySelector('.camera-label').textContent = 'Video is not supported here';
     return;
@@ -1333,6 +1404,7 @@ function startRecordingVideo(memory, onDone) {
   }
   mediaRecorder = new MediaRecorder(activeStream, mimeType ? { mimeType } : undefined);
   state.recording = true;
+  recordingStartedAt = Date.now();
   state.recordingSecondsLeft = Math.max(memory.videoLength, 1);
   document.querySelector('.shutter')?.classList.add('recording');
   document.querySelector('.camera-label').textContent = 'Recording';
@@ -1340,6 +1412,11 @@ function startRecordingVideo(memory, onDone) {
   const timer = window.setInterval(() => {
     if (!state.recording) {
       window.clearInterval(timer);
+      return;
+    }
+    if (eventEnded(memory)) {
+      document.querySelector('.camera-label').textContent = 'Memento has ended';
+      stopRecordingVideo();
       return;
     }
     state.recordingSecondsLeft = Math.max(0, state.recordingSecondsLeft - 1);
@@ -1361,9 +1438,9 @@ function startRecordingVideo(memory, onDone) {
     }
     const localUrl = URL.createObjectURL(blob);
     const posterUrl = await generateVideoPoster(localUrl).catch(() => '');
-    const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'video', localUrl, posterUrl, capturedByName: currentParticipantName(), sync: 'Syncing' });
+    const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'video', localUrl, posterUrl, capturedByName: currentParticipantName(), capturedAt: recordingStartedAt || Date.now(), sync: 'Syncing' });
     showLastShot(posterUrl || localUrl, 'Syncing', 'video');
-    uploadCapture(memory, item, blob, blob.type || 'video/webm').catch(() => markCapture(memory.id, item.id, 'Retry'));
+    uploadCapture(memory, item, blob, blob.type || 'video/webm').catch((error) => handleUploadFailure(memory, item, error));
     onDone();
   };
   mediaRecorder.start(1000);
@@ -1383,6 +1460,13 @@ function supportedVideoMimeType() {
 
 async function uploadCapture(memory, item, blob, contentType) {
   if (!state.guest?.memberId) throw new Error('Missing guest member');
+  const endTime = memory.endTime?.getTime?.();
+  const capturedAfterEnd = endTime && item.capturedAt && item.capturedAt >= endTime;
+  const unknownCaptureAfterEnd = !item.capturedAt && eventEnded(memory);
+  if (capturedAfterEnd || unknownCaptureAfterEnd) {
+    markCapture(memory.id, item.id, 'Ended');
+    throw new Error('Memento has ended');
+  }
   const extension = contentType.includes('video') ? videoExtension(contentType) : 'jpg';
   const uploadType = item.type === 'video' ? 'video/mp4' : contentType;
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
