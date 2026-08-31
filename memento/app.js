@@ -679,10 +679,21 @@ function emptyState() {
 }
 
 function summary(memory) {
+  const spotsLeft = Math.max(memory.guestLimit - memory.joined, 0);
+  const moments = memory.uploadedPhotos + memory.uploadedVideos;
   return `
     <div class="detail-overlay">
-      <h2>${escapeHtml(memory.title)}</h2>
-      <p>Starts ${escapeHtml(memory.date)}<br>Ends ${escapeHtml(memory.end)}</p>
+      <div class="detail-overlay-top">
+        <h2>${escapeHtml(memory.title)}</h2>
+        <span>${moments} uploaded</span>
+      </div>
+      <p class="detail-status">${memory.ended ? 'Ended' : 'Active'}</p>
+      <p>${escapeHtml(memory.dateRange)}</p>
+      <div class="stats">
+        <span><strong>${memory.joined}</strong> joined</span>
+        <span><strong>${spotsLeft}</strong> spots left</span>
+        <span><strong>${moments}</strong> moments</span>
+      </div>
     </div>`;
 }
 

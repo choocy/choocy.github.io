@@ -171,8 +171,14 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .detail-cover { position: sticky; top: 82px; border-radius: 8px; overflow: hidden; background: #111; }
 .hero-cover { aspect-ratio: 4 / 5; border-radius: 8px; }
 .detail-overlay { position: absolute; left: clamp(18px, 4vw, 30px); right: clamp(18px, 4vw, 30px); bottom: clamp(18px, 4vw, 30px); display: grid; gap: 8px; padding: 16px; border-radius: 7px; background: rgb(0 0 0 / 54%); color: white; backdrop-filter: blur(18px); }
-.detail-overlay h2 { color: white; }
+.detail-overlay-top { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.detail-overlay h2 { margin: 0; color: white; }
+.detail-overlay-top span { color: white; font-size: 13px; font-weight: 700; white-space: nowrap; }
 .detail-overlay p { margin: 0; color: rgb(255 255 255 / 76%); font-size: 15px; line-height: 1.45; }
+.detail-overlay .detail-status { width: max-content; padding: 5px 9px; border-radius: 999px; background: rgb(0 0 0 / 36%); color: white; font-size: 13px; font-weight: 700; }
+.detail-overlay .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); color: rgb(255 255 255 / 78%); }
+.detail-overlay .stats span { display: grid; gap: 2px; }
+.detail-overlay .stats strong { color: white; font-size: 17px; line-height: 1; }
 .detail-body { display: grid; gap: 14px; }
 .detail-actions { padding: 0 2px; }
 .local-note { margin: 0; font-size: 13px; color: var(--muted); }
