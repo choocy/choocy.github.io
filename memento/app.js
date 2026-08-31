@@ -735,6 +735,7 @@ function inviteSheet(memory) {
     <div class="sheet-backdrop" data-close-invite-sheet>
       <section class="invite-sheet" role="dialog" aria-label="Memento invite" data-sheet-panel>
         <button class="sheet-handle" data-close-invite-sheet aria-label="Close invite"></button>
+        <button class="sheet-close" data-close-invite-sheet aria-label="Close invite">${icon('close')}</button>
         <h2>Hand out the cameras.</h2>
         <p>Guests scan to join. No app or account needed.</p>
         <div class="qr-card">
@@ -1012,7 +1013,8 @@ function bind() {
     state.inviteSheet = true;
     render();
   });
-  document.querySelectorAll('[data-close-invite-sheet]').forEach((button) => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-close-invite-sheet]').forEach((button) => button.addEventListener('click', (event) => {
+    if (event.currentTarget.classList.contains('sheet-backdrop') && event.target !== event.currentTarget) return;
     state.inviteSheet = false;
     render();
   }));
