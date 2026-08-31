@@ -807,7 +807,7 @@ function camera() {
         <button data-zoom-choice="5">5</button>
       </div>
       <div class="camera-bottom" ${ended ? 'hidden' : ''}>
-        ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : '<div class="last-shot import-tile" aria-hidden="true"><img alt=""><span></span></div>'}
+        ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : `<button class="last-shot import-tile" data-view="detail" data-id="${memory.id}" type="button" aria-label="Open gallery"><img alt=""><span></span></button>`}
         <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
         <div class="tool-stack">
           <button data-flash aria-label="Flash">${icon('flash-off')}</button>
@@ -1545,7 +1545,7 @@ function startRecordingVideo(memory, onDone) {
   recordingStartedAt = Date.now();
   state.recordingSecondsLeft = Math.max(memory.videoLength, 1);
   document.querySelector('.shutter')?.classList.add('recording');
-  document.querySelector('.camera-label').textContent = 'Recording';
+  document.querySelector('.camera-label').textContent = '';
   updateRemaining(state.recordingSecondsLeft, 'recording', { animate: false });
   const timer = window.setInterval(() => {
     if (!state.recording) {
@@ -1568,7 +1568,7 @@ function startRecordingVideo(memory, onDone) {
     state.recording = false;
     window.clearInterval(timer);
     document.querySelector('.shutter')?.classList.remove('recording');
-    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+    const blob = new Blob(recordedChunks, { type: normalizedContentType(mediaRecorder.mimeType || 'video/webm') });
     if (!blob.size) {
       document.querySelector('.camera-label').textContent = 'Could not save video';
       updateCameraMode();
@@ -1605,8 +1605,8 @@ async function uploadCapture(memory, item, blob, contentType) {
     markCapture(memory.id, item.id, 'Ended');
     throw new Error('Memento has ended');
   }
-  const extension = contentType.includes('video') ? videoExtension(contentType) : 'jpg';
-  const uploadType = contentType;
+  const uploadType = normalizedContentType(contentType);
+  const extension = uploadType.includes('video') ? videoExtension(uploadType) : 'jpg';
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
   const thumbnailPath = `mementos/${memory.id}/thumbs/${item.id}.jpg`;
   const thumbnailBlob = await generateBlurredThumbnail(item, blob).catch(() => null);
@@ -1690,6 +1690,10 @@ function videoExtension(contentType) {
   if (contentType.includes('mp4')) return 'mp4';
   if (contentType.includes('quicktime')) return 'mov';
   return 'webm';
+}
+
+function normalizedContentType(contentType) {
+  return String(contentType || 'application/octet-stream').split(';')[0].trim().toLowerCase();
 }
 
 function videoDuration(file) {
