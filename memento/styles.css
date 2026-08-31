@@ -65,6 +65,11 @@ p { color: var(--muted); line-height: 1.55; }
 .cover-placeholder { width: 100%; height: 100%; min-height: 260px; display: grid; place-items: center; background: linear-gradient(135deg, color-mix(in srgb, var(--line), transparent 25%), var(--surface)); color: var(--muted); text-align: center; padding: 20px; }
 .card-copy { padding: 16px; display: grid; gap: 8px; }
 .card-overlay { position: absolute; left: 12px; right: 12px; bottom: 12px; display: grid; gap: 8px; padding: 14px; border-radius: 7px; background: rgb(0 0 0 / 54%); color: white; backdrop-filter: blur(18px); }
+.overlay-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: white; font-size: 13px; font-weight: 700; }
+.overlay-status span:first-child { padding: 5px 9px; border-radius: 999px; background: rgb(0 0 0 / 36%); }
+.card-overlay .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.card-overlay .stats span { display: grid; gap: 2px; }
+.card-overlay .stats strong { color: white; font-size: 17px; line-height: 1; }
 .card-overlay p, .card-overlay .stats, .card-overlay .status { color: rgb(255 255 255 / 78%); }
 .light-ghost { color: white; border-color: rgb(255 255 255 / 26%); background: rgb(255 255 255 / 10%); }
 .light-ink { color: #111; background: white; border-color: white; }
@@ -235,6 +240,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .camera { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100svh; height: 100dvh; background: #030303; color: white; display: grid; place-items: center; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .camera video { width: 100%; height: 100%; object-fit: cover; }
 .camera.selfie video { transform: scaleX(-1); }
+.camera.switching-camera video { opacity: 0; transition: opacity 120ms ease; }
 .camera-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgb(0 0 0 / 72%), rgb(0 0 0 / 5%) 24%, rgb(0 0 0 / 8%) 58%, rgb(0 0 0 / 76%)); }
 .camera-label { top: 50%; left: 50%; right: auto; z-index: 2; transform: translate(-50%, -50%); width: max-content; max-width: calc(100% - 40px); background: rgb(0 0 0 / 34%); opacity: .72; font-size: 12px; }
 .camera-label:empty { display: none; }
@@ -252,13 +258,13 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .remaining-counter { justify-self: end; display: flex; align-items: center; gap: 6px; padding: 2px 0; }
 .remaining-counter strong { display: inline-block; font-size: 38px; line-height: .84; font-weight: 720; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .remaining-counter span { width: 66px; color: white; font-size: 14px; line-height: 1.08; font-weight: 720; }
-.capture-mode { position: absolute; left: 50%; bottom: 218px; z-index: 3; transform: translateX(-50%); display: flex; gap: 3px; padding: 3px; border: 1px solid rgb(255 255 255 / 16%); border-radius: 999px; background: rgb(0 0 0 / 38%); backdrop-filter: blur(16px); }
+.capture-mode { position: absolute; left: 50%; bottom: 174px; z-index: 3; transform: translateX(-50%); display: flex; gap: 3px; padding: 3px; border: 1px solid rgb(255 255 255 / 16%); border-radius: 999px; background: rgb(0 0 0 / 38%); backdrop-filter: blur(16px); }
 .capture-mode button { width: 76px; height: 34px; border: 0; border-radius: 999px; background: transparent; color: rgb(255 255 255 / 58%); font-size: 14px; font-weight: 680; }
 .capture-mode button.selected { background: white; color: #111; }
-.zoom-strip { position: absolute; left: 50%; bottom: 156px; z-index: 3; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: clamp(24px, 7vw, 54px); width: min(500px, calc(100% - 92px)); }
+.zoom-strip { position: absolute; left: 50%; bottom: 118px; z-index: 3; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: clamp(24px, 7vw, 54px); width: min(500px, calc(100% - 92px)); }
 .zoom-strip button { width: 38px; height: 32px; border: 0; background: transparent; color: rgb(255 255 255 / 68%); font-size: 14px; font-weight: 690; }
 .zoom-strip button.selected { color: #ffe500; }
-.camera-bottom { position: absolute; left: 0; right: 0; bottom: max(42px, env(safe-area-inset-bottom)); z-index: 3; display: grid; grid-template-columns: 82px 1fr 82px; align-items: center; gap: 16px; padding: 0 30px 8px; }
+.camera-bottom { position: absolute; left: 0; right: 0; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 3; display: grid; grid-template-columns: 82px 1fr 82px; align-items: center; gap: 16px; padding: 0 30px 6px; }
 .last-shot { position: relative; left: auto; bottom: auto; z-index: auto; display: grid; place-items: center; width: 64px; height: 64px; padding: 0; border: 1px solid rgb(255 255 255 / 16%); border-radius: 7px; background: rgb(0 0 0 / 18%); color: white; font-size: 10px; overflow: hidden; }
 .last-shot::before { content: ""; width: 28px; height: 28px; border: 1px solid rgb(255 255 255 / 28%); border-radius: 5px; }
 .last-shot.has-capture::before { content: none; }
@@ -269,6 +275,8 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .last-shot.has-capture span { opacity: 1; }
 .flash { pointer-events: none; position: absolute; inset: 0; background: white; opacity: 0; }
 .shutter { justify-self: center; width: 74px; height: 74px; padding: 0 !important; border-radius: 999px; background: white !important; border: 5px solid rgb(255 255 255 / 38%) !important; box-shadow: 0 0 0 3px rgb(0 0 0 / 55%), 0 0 0 6px rgb(255 255 255 / 74%); }
+.shutter:disabled { display: grid; place-items: center; background: rgb(92 92 92 / 88%) !important; color: rgb(255 255 255 / 82%); opacity: 1; box-shadow: 0 0 0 3px rgb(0 0 0 / 48%), 0 0 0 6px rgb(255 255 255 / 30%); }
+.shutter svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 2.4; fill: none; }
 .shutter.video-ready { background: #ff3434 !important; }
 .shutter.recording { background: #ff2d2d !important; border-radius: 999px; box-shadow: 0 0 0 3px rgb(0 0 0 / 55%), 0 0 0 6px rgb(255 255 255 / 74%); }
 .tool-stack { justify-self: end; display: grid; gap: 18px; }
@@ -299,9 +307,9 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
   .remaining-counter strong { font-size: 34px; }
   .remaining-counter span { width: 56px; font-size: 13px; }
   .viewer-nav { display: none; }
-  .capture-mode { bottom: 210px; }
-  .zoom-strip { bottom: 150px; }
-  .camera-bottom { bottom: max(48px, env(safe-area-inset-bottom)); grid-template-columns: 66px 1fr 66px; padding-inline: 24px; }
+  .capture-mode { bottom: 170px; }
+  .zoom-strip { bottom: 112px; }
+  .camera-bottom { bottom: max(10px, env(safe-area-inset-bottom)); grid-template-columns: 66px 1fr 66px; padding-inline: 24px; }
   .last-shot { width: 60px; height: 60px; }
   .shutter { width: 70px; height: 70px; }
   .tool-stack { gap: 14px; }

@@ -155,7 +155,7 @@ async function fetchGuestMementos() {
 
   const [rows, members, media] = await Promise.all([
     supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
-    supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}&role=eq.guest`),
+    supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}`),
     supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=uploaded_at.desc.nullslast`),
   ]);
   return rows.map((row) => mapMemory(row, members, media));
@@ -177,6 +177,7 @@ function mapMemory(row, members = [], media = []) {
     id: row.id,
     title: row.title || 'Untitled Memento',
     date: formatDateTime(start),
+    dateRange: formatDateRange(start, end),
     end: formatDateTime(end),
     endTime: end,
     ended,
@@ -197,7 +198,7 @@ function mapMemory(row, members = [], media = []) {
     ownUploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
     ownUploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
     media: visibleMedia.map((item) => mapMediaItem(item, { revealed, sharedGallery, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
-    memberNames: members.map((member) => normalizeName(member.guest_name)),
+    memberNames: members.filter((member) => member.role === 'guest').map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
   };
@@ -276,6 +277,14 @@ function formatDateTime(date) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date);
+}
+
+function formatDateRange(start, end) {
+  if (!start && !end) return 'Date not set';
+  const formatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!start) return formatter.format(end);
+  if (!end) return formatter.format(start);
+  return `${formatter.format(start)}-${formatter.format(end)}`;
 }
 
 function revealLabel(mode, revealTime) {
@@ -625,12 +634,20 @@ function join() {
 
 function memoryCard(memory) {
   const actions = memory.ended ? '<p class="event-status">Memento has ended</p>' : `${cameraSupported() ? `<button class="ink light-ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory, 'ghost light-ghost')}`;
+  const spotsLeft = Math.max(memory.guestLimit - memory.joined, 0);
+  const moments = memory.uploadedPhotos + memory.uploadedVideos;
   return `
     <article class="memory-card cover-card">
       <button class="image-button" data-view="detail" data-id="${memory.id}">${imageMarkup(memory)}</button>
       <div class="card-overlay">
+        <div class="overlay-status"><span>${memory.ended ? 'Ended' : 'Active'}</span><span>${moments} uploaded</span></div>
         <h2>${escapeHtml(memory.title)}</h2>
-        <p>Starts ${escapeHtml(memory.date)}<br>Ends ${escapeHtml(memory.end)}</p>
+        <p>${escapeHtml(memory.dateRange)}</p>
+        <div class="stats">
+          <span><strong>${memory.joined}</strong> joined</span>
+          <span><strong>${spotsLeft}</strong> spots left</span>
+          <span><strong>${moments}</strong> moments</span>
+        </div>
         <div class="actions">${actions}</div>
       </div>
     </article>`;
@@ -819,7 +836,7 @@ function camera() {
       </div>
       <div class="camera-bottom" ${ended ? 'hidden' : ''}>
         ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : `<button class="last-shot import-tile" data-open-last-capture data-id="${memory.id}" type="button" aria-label="Open latest capture" disabled><img alt=""><span></span></button>`}
-        <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
+        <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}">${currentRemaining === 0 ? icon('lock') : ''}</button>
         <div class="tool-stack">
           <button data-flash aria-label="Flash">${icon('flash-off')}</button>
           <button data-facing aria-label="Switch camera">${icon('flip')}</button>
@@ -894,6 +911,7 @@ function updateCameraMode() {
   if (shutter) {
     shutter.disabled = count === 0 || !activeStream;
     shutter.ariaLabel = state.mode === 'photo' ? 'Take photo' : 'Record video';
+    shutter.innerHTML = count === 0 ? icon('lock') : '';
     shutter.classList.toggle('video-ready', state.mode === 'video');
   }
 }
@@ -1390,6 +1408,8 @@ async function switchCameraDuringRecording(video, label) {
   if (!navigator.mediaDevices?.getUserMedia) return;
   const audioTracks = activeStream?.getAudioTracks() || [];
   const oldVideoTracks = activeStream?.getVideoTracks() || [];
+  const camera = document.querySelector('.camera');
+  camera?.classList.add('switching-camera');
   label.textContent = 'Switching camera';
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
@@ -1406,6 +1426,8 @@ async function switchCameraDuringRecording(video, label) {
   } catch {
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
     label.textContent = '';
+  } finally {
+    window.setTimeout(() => camera?.classList.remove('switching-camera'), 160);
   }
 }
 
