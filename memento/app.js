@@ -476,7 +476,7 @@ document.addEventListener('visibilitychange', () => {
 
 function syncViewportHeight() {
   const viewport = window.visualViewport;
-  const height = viewport?.height || window.innerHeight;
+  const height = Math.max(viewport?.height || 0, window.innerHeight || 0);
   const top = viewport?.offsetTop || 0;
   if (!height) return;
   document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
