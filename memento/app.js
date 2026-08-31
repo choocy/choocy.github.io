@@ -475,10 +475,19 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function syncViewportHeight() {
-  const height = window.visualViewport?.height || window.innerHeight;
+  const viewport = window.visualViewport;
+  const height = viewport?.height || window.innerHeight;
+  const top = viewport?.offsetTop || 0;
   if (!height) return;
   document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
+  document.documentElement.style.setProperty('--app-top', `${Math.round(top)}px`);
   if (state.view === 'join') window.scrollTo(0, 0);
+}
+
+function stabilizeJoinViewport() {
+  syncViewportHeight();
+  if (state.view !== 'join') return;
+  [80, 240, 520, 900].forEach((delay) => window.setTimeout(syncViewportHeight, delay));
 }
 
 window.addEventListener('resize', syncViewportHeight);
@@ -886,7 +895,7 @@ function render() {
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
   document.documentElement.classList.toggle('join-open', state.view === 'join');
   document.documentElement.classList.toggle('viewer-open', state.viewer != null);
-  syncViewportHeight();
+  stabilizeJoinViewport();
   scheduleGallerySync();
 }
 
