@@ -356,7 +356,7 @@ async function hydrateCoverImages(renderWhenDone = true) {
       }
     }
     memory.media.forEach((item) => {
-      if (item.path) paths.push(item.path);
+      if (!item.locked && item.path) paths.push(item.path);
       if (!item.locked && item.originalPath) paths.push(item.originalPath);
     });
   }));
@@ -721,7 +721,7 @@ function mediaTile(item, index, memory) {
     : '';
   const locked = item.locked ? `<span class="locked-label">${escapeHtml(item.revealLabel)}</span>` : '';
   const media = item.locked
-    ? `${url ? `<img class="locked-preview" src="${url}" loading="lazy" alt="">` : `<span class="locked-placeholder">${icon('lock')}</span>`}`
+    ? `<span class="locked-placeholder">${icon('lock')}</span>`
     : item.type === 'video'
     ? `${item.posterUrl ? `<img src="${item.posterUrl}" loading="lazy" alt="" style="${style}">` : `<video src="${url}" muted playsinline preload="metadata" style="${style}"></video>`}<span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="" style="${style}">`;
@@ -768,10 +768,7 @@ function viewerMediaElement(item, url, reaction, className, active, memory) {
   const classes = `${className} ${reaction.filter || ''}`.trim();
   const style = unlockedMediaFilter(item, memory, reaction);
   if (item.locked) {
-    const preview = url
-      ? `<img class="${classes} locked-preview" src="${url}" alt="">`
-      : `<div class="${classes} locked-viewer-placeholder">${icon('lock')}</div>`;
-    return `${preview}<span class="viewer-lock-label">${escapeHtml(item.revealLabel)}</span>`;
+    return `<div class="${classes} locked-viewer-placeholder">${icon('lock')}</div><span class="viewer-lock-label">${escapeHtml(item.revealLabel)}</span>`;
   }
   return item.type === 'video'
     ? `<video class="${classes}" src="${url}" ${active ? 'controls autoplay' : 'muted'} playsinline style="${style}"></video>`
