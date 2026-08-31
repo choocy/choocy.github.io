@@ -52,6 +52,7 @@ const state = {
 };
 let revealRefreshTimer = null;
 let eventRefreshTimer = null;
+let gallerySyncTimer = null;
 
 function headers() {
   return {
@@ -128,6 +129,7 @@ async function loadMemories(options = {}) {
     await hydrateCoverImages(false);
     scheduleRevealRefresh();
     scheduleEventRefresh();
+    scheduleGallerySync();
     render();
   }
 }
@@ -443,6 +445,14 @@ function scheduleEventRefresh() {
     }
     refreshCurrentEventState();
   }, delay);
+}
+
+function scheduleGallerySync() {
+  window.clearTimeout(gallerySyncTimer);
+  if (!state.inviteCode || state.view !== 'detail' || state.viewer != null) return;
+  gallerySyncTimer = window.setTimeout(() => {
+    if (state.view === 'detail' && state.viewer == null) loadMemories({ quiet: true });
+  }, 7000);
 }
 
 async function refreshCurrentEventState() {
@@ -864,6 +874,7 @@ function render() {
   bind();
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
   document.documentElement.classList.toggle('viewer-open', state.viewer != null);
+  scheduleGallerySync();
 }
 
 function bind() {
