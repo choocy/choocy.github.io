@@ -1187,9 +1187,15 @@ function markCapture(memoryId, itemId, sync) {
   const list = state.localCaptures.get(memoryId) || [];
   const memory = state.memories.find((entry) => entry.id === memoryId);
   if (sync === 'Uploaded' && memory && !memory.revealed) {
-    state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
     updateLastShotStatus(sync);
-    loadMemories({ quiet: state.view === 'camera' });
+    if (state.view === 'camera') {
+      const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
+      state.localCaptures.set(memoryId, next);
+      updateCameraMode();
+    } else {
+      state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
+      loadMemories({ quiet: true });
+    }
     return;
   }
   const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
