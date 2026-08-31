@@ -1284,6 +1284,8 @@ let flashMode = false;
 let viewerAnimationTimer = null;
 let recordingStartedAt = 0;
 let streamHasAudio = false;
+let recordingCanvas = null;
+let recordingDrawFrame = 0;
 
 function startCamera() {
   const memory = currentMemory();
@@ -1300,7 +1302,8 @@ function startCamera() {
 
   document.querySelector('[data-facing]')?.addEventListener('click', () => {
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
-    openCameraStream(video, label);
+    if (state.recording) switchCameraDuringRecording(video, label);
+    else openCameraStream(video, label);
   });
 
   document.querySelector('[data-flash]')?.addEventListener('click', () => toggleFlash());
@@ -1359,6 +1362,7 @@ function openCameraStream(video, label) {
     streamHasAudio = wantsAudio && stream.getAudioTracks().length > 0;
     activeTrack = stream.getVideoTracks()[0] || null;
     video.srcObject = stream;
+    document.querySelector('.camera')?.classList.toggle('selfie', facingMode === 'user');
     video.muted = true;
     video.setAttribute('playsinline', '');
     video.play().then(() => {
@@ -1382,6 +1386,29 @@ function stopCamera() {
   streamHasAudio = false;
 }
 
+async function switchCameraDuringRecording(video, label) {
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  const audioTracks = activeStream?.getAudioTracks() || [];
+  const oldVideoTracks = activeStream?.getVideoTracks() || [];
+  label.textContent = 'Switching camera';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+    oldVideoTracks.forEach((track) => track.stop());
+    activeTrack = stream.getVideoTracks()[0] || null;
+    activeStream = new MediaStream([...stream.getVideoTracks(), ...audioTracks]);
+    streamHasAudio = audioTracks.length > 0;
+    video.srcObject = activeStream;
+    document.querySelector('.camera')?.classList.toggle('selfie', facingMode === 'user');
+    await video.play().catch(() => {});
+    bindZoomIfSupported(activeStream);
+    bindFlashIfSupported();
+    label.textContent = '';
+  } catch {
+    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    label.textContent = '';
+  }
+}
+
 async function ensureVideoAudioStream(video, label) {
   if (streamHasAudio || !navigator.mediaDevices?.getUserMedia) return;
   label.textContent = 'Starting microphone';
@@ -1392,6 +1419,7 @@ async function ensureVideoAudioStream(video, label) {
     streamHasAudio = stream.getAudioTracks().length > 0;
     activeTrack = stream.getVideoTracks()[0] || null;
     video.srcObject = stream;
+    document.querySelector('.camera')?.classList.toggle('selfie', facingMode === 'user');
     video.muted = true;
     video.setAttribute('playsinline', '');
     await video.play().catch(() => {});
@@ -1569,8 +1597,16 @@ function startRecordingVideo(memory, onDone) {
     document.querySelector('.camera-label').textContent = 'Video upload needs MP4 support';
     return;
   }
-  mediaRecorder = new MediaRecorder(activeStream, mimeType ? { mimeType } : undefined);
   state.recording = true;
+  const video = document.querySelector('.camera video');
+  const recorderStream = video ? recordingStreamFromCanvas(video) : activeStream;
+  try {
+    mediaRecorder = new MediaRecorder(recorderStream || activeStream, mimeType ? { mimeType } : undefined);
+  } catch {
+    stopRecordingCanvas();
+    state.recording = false;
+    mediaRecorder = new MediaRecorder(activeStream, mimeType ? { mimeType } : undefined);
+  }
   recordingStartedAt = Date.now();
   state.recordingSecondsLeft = Math.max(memory.videoLength, 1);
   document.querySelector('.shutter')?.classList.add('recording');
@@ -1596,6 +1632,7 @@ function startRecordingVideo(memory, onDone) {
   mediaRecorder.onstop = async () => {
     state.recording = false;
     window.clearInterval(timer);
+    stopRecordingCanvas();
     document.querySelector('.shutter')?.classList.remove('recording');
     const blob = new Blob(recordedChunks, { type: normalizedContentType(mediaRecorder.mimeType || 'video/webm') });
     if (!blob.size) {
@@ -1611,6 +1648,40 @@ function startRecordingVideo(memory, onDone) {
     onDone();
   };
   mediaRecorder.start(1000);
+}
+
+function recordingStreamFromCanvas(video) {
+  if (!video || typeof document.createElement('canvas').captureStream !== 'function') return null;
+  const settings = activeTrack?.getSettings?.() || {};
+  const width = video.videoWidth || settings.width || 1280;
+  const height = video.videoHeight || settings.height || 720;
+  recordingCanvas = document.createElement('canvas');
+  recordingCanvas.width = width;
+  recordingCanvas.height = height;
+  const context = recordingCanvas.getContext('2d');
+  if (!context) return null;
+  const draw = () => {
+    if (!state.recording || !recordingCanvas) return;
+    context.save();
+    context.clearRect(0, 0, width, height);
+    if (facingMode === 'user') {
+      context.translate(width, 0);
+      context.scale(-1, 1);
+    }
+    context.drawImage(video, 0, 0, width, height);
+    context.restore();
+    recordingDrawFrame = requestAnimationFrame(draw);
+  };
+  const stream = recordingCanvas.captureStream(30);
+  activeStream?.getAudioTracks().forEach((track) => stream.addTrack(track));
+  recordingDrawFrame = requestAnimationFrame(draw);
+  return stream;
+}
+
+function stopRecordingCanvas() {
+  if (recordingDrawFrame) cancelAnimationFrame(recordingDrawFrame);
+  recordingDrawFrame = 0;
+  recordingCanvas = null;
 }
 
 function stopRecordingVideo() {

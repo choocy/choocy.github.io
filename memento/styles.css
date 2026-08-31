@@ -234,6 +234,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .viewer-sticker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .camera { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100svh; height: 100dvh; background: #030303; color: white; display: grid; place-items: center; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .camera video { width: 100%; height: 100%; object-fit: cover; }
+.camera.selfie video { transform: scaleX(-1); }
 .camera-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgb(0 0 0 / 72%), rgb(0 0 0 / 5%) 24%, rgb(0 0 0 / 8%) 58%, rgb(0 0 0 / 76%)); }
 .camera-label { top: 50%; left: 50%; right: auto; z-index: 2; transform: translate(-50%, -50%); width: max-content; max-width: calc(100% - 40px); background: rgb(0 0 0 / 34%); opacity: .72; font-size: 12px; }
 .camera-label:empty { display: none; }
