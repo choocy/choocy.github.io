@@ -481,7 +481,7 @@ function enterImmersiveMode() {
 }
 
 function topbar() {
-  if (['invite', 'loading', 'join'].includes(state.view)) return '';
+  if (['invite', 'loading', 'join', 'camera'].includes(state.view)) return '';
   const showMenu = state.guest?.name && ['home', 'detail'].includes(state.view);
   return `
     <header class="topbar">
@@ -873,6 +873,7 @@ function render() {
   app.innerHTML = topbar() + page;
   bind();
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
+  document.documentElement.classList.toggle('join-open', state.view === 'join');
   document.documentElement.classList.toggle('viewer-open', state.viewer != null);
   scheduleGallerySync();
 }

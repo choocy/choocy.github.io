@@ -23,9 +23,11 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--background); color: var(--ink); }
 html.camera-open { width: 100%; height: 100%; touch-action: manipulation; overscroll-behavior: none; background: #030303; }
+html.join-open { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: #070707; }
 html.viewer-open { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: #050505; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; }
 html.camera-open body { width: 100%; height: 100%; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; background: #030303; }
+html.join-open body { width: 100%; height: 100%; overflow: hidden; background: #070707; }
 html.viewer-open body { width: 100%; height: 100%; overflow: hidden; background: #050505; }
 button, input, label { font: inherit; }
 button, label { cursor: pointer; }
@@ -82,7 +84,7 @@ p { color: var(--muted); line-height: 1.55; }
 .shell > p { max-width: 640px; margin: 0; }
 input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); padding: 0 13px; }
 .field-label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 550; }
-.form-error { margin: 0; color: #9b2f2f; font-size: 13px; }
+.form-error { margin: 0; color: #ffd7d7; font-size: 13px; font-weight: 650; }
 .two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .camera-label { position: absolute; left: 18px; right: 18px; top: 18px; border-radius: 5px; background: rgb(0 0 0 / 58%); color: white; padding: 7px 9px; font-size: 12px; text-align: center; }
@@ -105,7 +107,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 
 .close { justify-self: end; }
 
-.invite-open, .guest-loading, .join-hero { position: fixed; inset: 0; min-height: 100dvh; overflow: hidden; background: #070707; color: white; }
+.invite-open, .guest-loading, .join-hero { position: fixed; inset: 0; height: 100vh; height: 100svh; min-height: 100svh; overflow: hidden; background: #070707; color: white; }
 .invite-backdrop, .join-bg { position: absolute; inset: 0; opacity: .42; filter: blur(18px) brightness(.64); transform: scale(1.06); }
 .invite-backdrop-image, .join-bg-image { width: 100%; height: 100%; object-fit: cover; }
 .invite-open::after, .join-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgb(0 0 0 / 25%), rgb(0 0 0 / 18%) 42%, rgb(0 0 0 / 82%)); }
@@ -147,6 +149,7 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .name-pill input { min-height: 0; padding: 0; border: 0; background: transparent; color: white; font-size: 18px; outline: none; }
 .welcome-back { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; margin: 0; border: 1px solid rgb(31 217 111 / 38%); border-radius: 16px; background: rgb(8 58 32 / 56%); color: white; font-size: 15px; font-weight: 700; backdrop-filter: blur(18px); }
 .welcome-back svg { width: 17px; height: 17px; padding: 4px; border-radius: 999px; background: #22e879; color: #062512; stroke-width: 3; }
+.join-bottom-actions .form-error { padding: 11px 13px; border: 1px solid rgb(255 112 112 / 28%); border-radius: 14px; background: rgb(82 18 18 / 68%); color: #ffe1e1; backdrop-filter: blur(16px); }
 .take-camera { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; border: 0; border-radius: 18px; background: rgb(255 255 255 / 76%); color: #30302d; font-size: 16px; font-weight: 720; }
 .take-camera svg { width: 20px; height: 20px; }
 @keyframes spin { to { transform: rotate(360deg); } }
