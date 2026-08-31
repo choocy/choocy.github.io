@@ -474,6 +474,17 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+function syncViewportHeight() {
+  const height = window.visualViewport?.height || window.innerHeight;
+  if (!height) return;
+  document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
+  if (state.view === 'join') window.scrollTo(0, 0);
+}
+
+window.addEventListener('resize', syncViewportHeight);
+window.visualViewport?.addEventListener('resize', syncViewportHeight);
+window.visualViewport?.addEventListener('scroll', syncViewportHeight);
+
 function enterImmersiveMode() {
   const root = document.documentElement;
   if (document.fullscreenElement || !root.requestFullscreen) return;
@@ -875,6 +886,7 @@ function render() {
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
   document.documentElement.classList.toggle('join-open', state.view === 'join');
   document.documentElement.classList.toggle('viewer-open', state.viewer != null);
+  syncViewportHeight();
   scheduleGallerySync();
 }
 
@@ -1742,4 +1754,5 @@ function remainingLabel(count, mode) {
   return count === 1 ? 'photo remaining' : 'photos remaining';
 }
 
+syncViewportHeight();
 loadMemories();
