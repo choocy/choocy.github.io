@@ -820,7 +820,7 @@ function camera() {
       <div class="camera-scrim"></div>
       <div class="camera-label">${ended ? 'Memento has ended' : 'Camera preview'}</div>
       <div class="camera-top">
-        <button class="camera-back" data-view="detail" data-id="${memory.id}" aria-label="Back">${icon('chevron-left')}</button>
+        <button class="camera-back" data-view="detail" data-id="${memory.id}" aria-label="Back">${icon('chevron-down')}</button>
         <div class="camera-title"><strong>${escapeHtml(memory.title)}</strong><span>${icon('users')} ${joined}<i></i>${icon('clock')} ${escapeHtml(memory.reveal)}</span></div>
         <div class="remaining-counter"><strong data-remaining>${currentRemaining}</strong><span data-remaining-label>${remainingLabel(currentRemaining, state.mode)}</span></div>
       </div>
@@ -876,6 +876,7 @@ function icon(name) {
   const icons = {
     'chevron-left': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6"/></svg>',
     'chevron-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
+    'chevron-down': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
     users: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
@@ -1319,9 +1320,11 @@ function startCamera() {
   openCameraStream(video, label);
 
   document.querySelector('[data-facing]')?.addEventListener('click', () => {
-    facingMode = facingMode === 'environment' ? 'user' : 'environment';
-    if (state.recording) switchCameraDuringRecording(video, label);
-    else openCameraStream(video, label);
+    const camera = document.querySelector('.camera');
+    camera?.classList.add('switching-camera');
+    const nextFacingMode = facingMode === 'environment' ? 'user' : 'environment';
+    if (state.recording) switchCameraDuringRecording(video, label, nextFacingMode);
+    else openCameraStream(video, label, nextFacingMode);
   });
 
   document.querySelector('[data-flash]')?.addEventListener('click', () => toggleFlash());
@@ -1371,7 +1374,9 @@ function startCamera() {
   });
 }
 
-function openCameraStream(video, label) {
+function openCameraStream(video, label, nextFacingMode = facingMode) {
+  facingMode = nextFacingMode;
+  const camera = document.querySelector('.camera');
   stopCamera();
   label.textContent = 'Starting camera';
   const wantsAudio = state.mode === 'video';
@@ -1380,20 +1385,23 @@ function openCameraStream(video, label) {
     streamHasAudio = wantsAudio && stream.getAudioTracks().length > 0;
     activeTrack = stream.getVideoTracks()[0] || null;
     video.srcObject = stream;
-    document.querySelector('.camera')?.classList.toggle('selfie', facingMode === 'user');
+    camera?.classList.toggle('selfie', facingMode === 'user');
     video.muted = true;
     video.setAttribute('playsinline', '');
     video.play().then(() => {
       label.textContent = '';
+      window.setTimeout(() => camera?.classList.remove('switching-camera'), 80);
       updateCameraMode();
     }).catch(() => {
       label.textContent = 'Tap shutter when camera is ready';
+      window.setTimeout(() => camera?.classList.remove('switching-camera'), 80);
       updateCameraMode();
     });
     bindZoomIfSupported(stream);
     bindFlashIfSupported();
   }).catch(() => {
     label.textContent = 'Camera permission needed';
+    window.setTimeout(() => camera?.classList.remove('switching-camera'), 80);
   });
 }
 
@@ -1404,12 +1412,14 @@ function stopCamera() {
   streamHasAudio = false;
 }
 
-async function switchCameraDuringRecording(video, label) {
+async function switchCameraDuringRecording(video, label, nextFacingMode) {
   if (!navigator.mediaDevices?.getUserMedia) return;
   const audioTracks = activeStream?.getAudioTracks() || [];
   const oldVideoTracks = activeStream?.getVideoTracks() || [];
   const camera = document.querySelector('.camera');
   camera?.classList.add('switching-camera');
+  const previousFacingMode = facingMode;
+  facingMode = nextFacingMode || (facingMode === 'environment' ? 'user' : 'environment');
   label.textContent = 'Switching camera';
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
@@ -1418,16 +1428,16 @@ async function switchCameraDuringRecording(video, label) {
     activeStream = new MediaStream([...stream.getVideoTracks(), ...audioTracks]);
     streamHasAudio = audioTracks.length > 0;
     video.srcObject = activeStream;
-    document.querySelector('.camera')?.classList.toggle('selfie', facingMode === 'user');
+    camera?.classList.toggle('selfie', facingMode === 'user');
     await video.play().catch(() => {});
     bindZoomIfSupported(activeStream);
     bindFlashIfSupported();
     label.textContent = '';
   } catch {
-    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    facingMode = previousFacingMode;
     label.textContent = '';
   } finally {
-    window.setTimeout(() => camera?.classList.remove('switching-camera'), 160);
+    window.setTimeout(() => camera?.classList.remove('switching-camera'), 220);
   }
 }
 

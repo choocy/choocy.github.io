@@ -170,9 +170,9 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .detail { display: grid; grid-template-columns: minmax(280px, .65fr) minmax(0, 1fr); gap: 22px; align-items: start; }
 .detail-cover { position: sticky; top: 82px; border-radius: 8px; overflow: hidden; background: #111; }
 .hero-cover { aspect-ratio: 4 / 5; border-radius: 8px; }
-.detail-overlay { position: absolute; left: 14px; right: 14px; bottom: 14px; display: grid; gap: 7px; padding: 14px; border-radius: 7px; background: rgb(0 0 0 / 55%); color: white; backdrop-filter: blur(16px); }
+.detail-overlay { position: absolute; left: clamp(18px, 4vw, 30px); right: clamp(18px, 4vw, 30px); bottom: clamp(18px, 4vw, 30px); display: grid; gap: 8px; padding: 16px; border-radius: 7px; background: rgb(0 0 0 / 54%); color: white; backdrop-filter: blur(18px); }
 .detail-overlay h2 { color: white; }
-.detail-overlay p { margin: 0; color: rgb(255 255 255 / 76%); font-size: 14px; }
+.detail-overlay p { margin: 0; color: rgb(255 255 255 / 76%); font-size: 15px; line-height: 1.45; }
 .detail-body { display: grid; gap: 14px; }
 .detail-actions { padding: 0 2px; }
 .local-note { margin: 0; font-size: 13px; color: var(--muted); }
@@ -238,17 +238,17 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .viewer-sticker strong { font-size: 24px; line-height: 1; }
 .viewer-sticker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .camera { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100svh; height: 100dvh; background: #030303; color: white; display: grid; place-items: center; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-.camera video { width: 100%; height: 100%; object-fit: cover; }
+.camera video { width: 100%; height: 100%; object-fit: cover; transition: opacity 120ms ease; }
 .camera.selfie video { transform: scaleX(-1); }
-.camera.switching-camera video { opacity: 0; transition: opacity 120ms ease; }
+.camera.switching-camera video { opacity: 0; transition-duration: 60ms; }
 .camera-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgb(0 0 0 / 72%), rgb(0 0 0 / 5%) 24%, rgb(0 0 0 / 8%) 58%, rgb(0 0 0 / 76%)); }
 .camera-label { top: 50%; left: 50%; right: auto; z-index: 2; transform: translate(-50%, -50%); width: max-content; max-width: calc(100% - 40px); background: rgb(0 0 0 / 34%); opacity: .72; font-size: 12px; }
 .camera-label:empty { display: none; }
 .camera.ended .camera-label { z-index: 4; padding: 10px 14px; background: rgb(0 0 0 / 58%); color: white; opacity: 1; font-size: 15px; font-weight: 700; }
 .light { position: absolute; top: 18px; right: 18px; z-index: 2; background: rgb(255 255 255 / 12%); color: white; border-color: rgb(255 255 255 / 24%); }
 .unsupported { position: absolute; bottom: 112px; color: white; background: rgb(0 0 0 / 45%); padding: 8px 10px; border-radius: 5px; }
-.camera-top { position: absolute; left: 0; right: 0; top: max(28px, env(safe-area-inset-top)); z-index: 3; display: grid; grid-template-columns: 72px minmax(0, 1fr) 104px; align-items: start; padding: 20px 22px 0; }
-.camera-back { justify-self: start; width: 40px; height: 40px; border: 0; background: transparent; color: white; }
+.camera-top { position: absolute; left: 0; right: 0; top: max(8px, env(safe-area-inset-top)); z-index: 3; display: grid; grid-template-columns: 72px minmax(0, 1fr) 120px; align-items: start; padding: 10px 22px 0; }
+.camera-back { justify-self: start; display: grid; place-items: center; width: 58px; height: 58px; border: 1px solid rgb(255 255 255 / 7%); border-radius: 13px; background: rgb(0 0 0 / 34%); color: white; backdrop-filter: blur(14px); }
 .camera svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.1; }
 .camera-title { display: grid; justify-items: center; gap: 6px; min-width: 0; text-align: center; }
 .camera-title strong { max-width: min(220px, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 690; }
@@ -301,7 +301,8 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
   .event-meta { font-size: 13px; }
   .welcome-back { min-height: 46px; border-radius: 15px; font-size: 14px; }
   .take-camera { min-height: 50px; border-radius: 17px; font-size: 15px; }
-  .camera-top { top: max(24px, env(safe-area-inset-top)); grid-template-columns: 58px minmax(0, 1fr) 92px; padding: 18px 18px 0; }
+  .camera-top { top: max(6px, env(safe-area-inset-top)); grid-template-columns: 58px minmax(0, 1fr) 96px; padding: 8px 18px 0; }
+  .camera-back { width: 48px; height: 48px; border-radius: 12px; }
   .camera-title strong { font-size: 17px; }
   .camera-title span { font-size: 12px; }
   .remaining-counter strong { font-size: 34px; }
