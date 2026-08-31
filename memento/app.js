@@ -419,7 +419,10 @@ function mediaUrl(item) {
 
 function setView(next, id) {
   if (state.view === 'camera' && next !== 'camera') stopCamera();
-  if (next === 'camera') enterImmersiveMode();
+  if (next === 'camera') {
+    state.lastCaptureId = '';
+    enterImmersiveMode();
+  }
   state.guestMenuOpen = false;
   state.view = next;
   if (id) state.selectedId = id;
@@ -818,7 +821,7 @@ function camera() {
         <button data-zoom-choice="5">5</button>
       </div>
       <div class="camera-bottom" ${ended ? 'hidden' : ''}>
-        ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : `<button class="last-shot import-tile" data-open-last-capture data-id="${memory.id}" type="button" aria-label="Open latest capture"><img alt=""><span></span></button>`}
+        ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : `<button class="last-shot import-tile" data-open-last-capture data-id="${memory.id}" type="button" aria-label="Open latest capture" disabled><img alt=""><span></span></button>`}
         <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
         <div class="tool-stack">
           <button data-flash aria-label="Flash">${icon('flash-off')}</button>
@@ -1040,7 +1043,7 @@ function moveViewer(step) {
 
 function openLastCapture(memoryId) {
   const memory = state.memories.find((entry) => entry.id === memoryId) || currentMemory();
-  if (!memory) return;
+  if (!memory || !state.lastCaptureId) return;
   if (state.view === 'camera') stopCamera();
   state.view = 'detail';
   state.selectedId = memory.id;
@@ -1362,7 +1365,7 @@ function openCameraStream(video, label) {
     video.muted = true;
     video.setAttribute('playsinline', '');
     video.play().then(() => {
-      label.textContent = 'Camera ready';
+      label.textContent = '';
       updateCameraMode();
     }).catch(() => {
       label.textContent = 'Tap shutter when camera is ready';
@@ -1397,7 +1400,7 @@ async function ensureVideoAudioStream(video, label) {
     await video.play().catch(() => {});
     bindZoomIfSupported(stream);
     bindFlashIfSupported();
-    label.textContent = 'Camera ready';
+    label.textContent = '';
   } catch {
     label.textContent = 'Microphone permission needed';
     throw new Error('microphone permission needed');
@@ -1799,6 +1802,7 @@ function showLastShot(url, statusText = 'Saved local', type = 'photo') {
   if (shot) {
     shot.classList.add('has-capture');
     shot.classList.toggle('video-capture', type === 'video');
+    shot.disabled = false;
     const img = shot.querySelector('img');
     if (img && url) img.src = url;
     const status = shot.querySelector('span');
