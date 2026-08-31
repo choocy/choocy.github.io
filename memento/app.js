@@ -44,6 +44,7 @@ const state = {
   viewer: null,
   previousViewer: null,
   viewerDirection: 0,
+  lastCaptureId: '',
   reactions: new Map(),
   showCapturedBy: loadCapturedByPreference(),
   mode: 'photo',
@@ -112,6 +113,7 @@ async function uploadStorageObject(path, blob, contentType) {
 }
 
 async function loadMemories(options = {}) {
+  const previousSignature = gallerySignature();
   state.loading = true;
   state.error = '';
   if (!options.quiet) render();
@@ -130,8 +132,17 @@ async function loadMemories(options = {}) {
     scheduleRevealRefresh();
     scheduleEventRefresh();
     scheduleGallerySync();
-    render();
+    if (!options.renderOnlyWhenChanged || previousSignature !== gallerySignature()) render();
   }
+}
+
+function gallerySignature() {
+  return state.memories.map((memory) => [
+    memory.id,
+    memory.revealed,
+    memory.ended,
+    memory.media.map((item) => [item.id, item.path, item.originalPath, item.locked, item.sync].join(':')).join('|'),
+  ].join('~')).join('||');
 }
 
 async function fetchGuestMementos() {
@@ -451,7 +462,7 @@ function scheduleGallerySync() {
   window.clearTimeout(gallerySyncTimer);
   if (!state.inviteCode || state.view !== 'detail' || state.viewer != null) return;
   gallerySyncTimer = window.setTimeout(() => {
-    if (state.view === 'detail' && state.viewer == null) loadMemories({ quiet: true });
+    if (state.view === 'detail' && state.viewer == null) loadMemories({ quiet: true, renderOnlyWhenChanged: true });
   }, 7000);
 }
 
@@ -807,7 +818,7 @@ function camera() {
         <button data-zoom-choice="5">5</button>
       </div>
       <div class="camera-bottom" ${ended ? 'hidden' : ''}>
-        ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : `<button class="last-shot import-tile" data-view="detail" data-id="${memory.id}" type="button" aria-label="Open gallery"><img alt=""><span></span></button>`}
+        ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : `<button class="last-shot import-tile" data-open-last-capture data-id="${memory.id}" type="button" aria-label="Open latest capture"><img alt=""><span></span></button>`}
         <button class="shutter" data-shutter disabled aria-label="${state.mode === 'photo' ? 'Take photo' : 'Record video'}"></button>
         <div class="tool-stack">
           <button data-flash aria-label="Flash">${icon('flash-off')}</button>
@@ -926,6 +937,9 @@ function bind() {
     state.viewerDirection = 0;
     render();
   }));
+  document.querySelector('[data-open-last-capture]')?.addEventListener('click', (event) => {
+    openLastCapture(event.currentTarget.dataset.id);
+  });
   document.querySelector('[data-close-viewer]')?.addEventListener('click', () => {
     state.viewer = null;
     state.previousViewer = null;
@@ -968,9 +982,6 @@ function bind() {
   }));
   document.querySelector('[data-open-invite]')?.addEventListener('click', openInvite);
 
-  const cameraSurface = document.querySelector('.camera');
-  cameraSurface?.addEventListener('dblclick', (event) => event.preventDefault());
-  cameraSurface?.addEventListener('touchend', preventFastDoubleTap, { passive: false });
   settleViewerAnimation();
 }
 
@@ -1027,6 +1038,20 @@ function moveViewer(step) {
   render();
 }
 
+function openLastCapture(memoryId) {
+  const memory = state.memories.find((entry) => entry.id === memoryId) || currentMemory();
+  if (!memory) return;
+  if (state.view === 'camera') stopCamera();
+  state.view = 'detail';
+  state.selectedId = memory.id;
+  const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
+  const index = items.findIndex((item) => item.id === state.lastCaptureId);
+  state.viewer = index >= 0 ? index : null;
+  state.previousViewer = null;
+  state.viewerDirection = 0;
+  render();
+}
+
 function settleViewerAnimation() {
   if (!state.viewerDirection) return;
   window.clearTimeout(viewerAnimationTimer);
@@ -1055,6 +1080,9 @@ function preventFastDoubleTap(event) {
   if (now - lastTouchEnd <= 320) event.preventDefault();
   lastTouchEnd = now;
 }
+
+document.addEventListener('dblclick', (event) => event.preventDefault(), { passive: false });
+document.addEventListener('touchend', preventFastDoubleTap, { passive: false });
 
 async function joinMemento(event) {
   event.preventDefault();
@@ -1169,6 +1197,7 @@ async function importLocalMedia(event) {
 
 function addLocalCapture(memoryId, item) {
   const list = state.localCaptures.get(memoryId) || [];
+  state.lastCaptureId = item.id;
   state.localCaptures.set(memoryId, [item, ...list]);
   if (state.view !== 'camera') render();
   return item;
@@ -1368,7 +1397,7 @@ async function ensureVideoAudioStream(video, label) {
     await video.play().catch(() => {});
     bindZoomIfSupported(stream);
     bindFlashIfSupported();
-    label.textContent = streamHasAudio ? 'Camera ready' : 'Recording without sound';
+    label.textContent = 'Camera ready';
   } catch {
     label.textContent = 'Microphone permission needed';
     throw new Error('microphone permission needed');
@@ -1592,7 +1621,7 @@ function stopRecordingVideo() {
 }
 
 function supportedVideoMimeType() {
-  const types = ['video/mp4;codecs=h264', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  const types = ['video/mp4;codecs=h264', 'video/mp4'];
   return types.find((type) => MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -1605,7 +1634,7 @@ async function uploadCapture(memory, item, blob, contentType) {
     markCapture(memory.id, item.id, 'Ended');
     throw new Error('Memento has ended');
   }
-  const uploadType = normalizedContentType(contentType);
+  const uploadType = item.type === 'video' ? 'video/mp4' : normalizedContentType(contentType);
   const extension = uploadType.includes('video') ? videoExtension(uploadType) : 'jpg';
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
   const thumbnailPath = `mementos/${memory.id}/thumbs/${item.id}.jpg`;
