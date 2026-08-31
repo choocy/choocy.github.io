@@ -44,6 +44,7 @@ const state = {
   viewer: null,
   previousViewer: null,
   viewerDirection: 0,
+  inviteSheet: false,
   lastCaptureId: '',
   reactions: new Map(),
   showCapturedBy: loadCapturedByPreference(),
@@ -149,8 +150,9 @@ async function fetchGuestMementos() {
   const invite = state.inviteCode;
   if (!invite) return [];
 
-  const inviteRows = await supabaseJson(`invite_codes?select=memento_id&is_active=eq.true&code=eq.${encodeURIComponent(invite)}&limit=1`);
-  const mementoId = inviteRows[0]?.memento_id;
+  const inviteRows = await supabaseJson(`invite_codes?select=memento_id,code,invite_url&is_active=eq.true&code=eq.${encodeURIComponent(invite)}&limit=1`);
+  const inviteRow = inviteRows[0];
+  const mementoId = inviteRow?.memento_id;
   if (!mementoId) return [];
 
   const [rows, members, media] = await Promise.all([
@@ -158,10 +160,10 @@ async function fetchGuestMementos() {
     supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}`),
     supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=uploaded_at.desc.nullslast`),
   ]);
-  return rows.map((row) => mapMemory(row, members, media));
+  return rows.map((row) => mapMemory(row, members, media, inviteRow));
 }
 
-function mapMemory(row, members = [], media = []) {
+function mapMemory(row, members = [], media = [], inviteRow = null) {
   const start = parseDate(row.start_time);
   const end = parseDate(row.end_time);
   const revealTime = parseDate(row.reveal_time) || end;
@@ -190,6 +192,8 @@ function mapMemory(row, members = [], media = []) {
     revealed,
     reveal: revealLabel(row.reveal_mode, revealTime),
     revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later',
+    inviteCode: inviteRow?.code || state.inviteCode,
+    inviteUrl: inviteRow?.invite_url || inviteUrl(inviteRow?.code || state.inviteCode),
     sharedGallery,
     guestLimit: numberValue(row.guest_limit, 0),
     joined: members.length,
@@ -700,7 +704,9 @@ function summary(memory) {
 function detail() {
   const memory = currentMemory();
   if (!memory) return emptyState();
-  const actions = memory.ended ? '<p class="event-status">Memento has ended</p>' : `${cameraSupported() ? `<button class="ink" data-view="camera" data-id="${memory.id}">Camera</button>` : ''}${albumAction(memory)}`;
+  const inviteAction = memory.inviteCode ? `<button class="ghost detail-action-button" data-show-invite-sheet type="button">${icon('qr')} Invite</button>` : '';
+  const cameraAction = !memory.ended && cameraSupported() ? `<button class="ink detail-action-button" data-view="camera" data-id="${memory.id}">${icon('camera')} Camera</button>` : '';
+  const actions = memory.ended ? `${inviteAction}<p class="event-status">Memento has ended</p>` : `${inviteAction}${cameraAction}`;
 
   return `
     <section class="page detail">
@@ -714,8 +720,51 @@ function detail() {
         ${guestGallery(memory)}
       </div>
       ${guestMenu()}
+      ${inviteSheet(memory)}
       ${viewer(memory)}
     </section>`;
+}
+
+function inviteSheet(memory) {
+  if (!state.inviteSheet || !memory?.inviteCode) return '';
+  const code = memory.inviteCode;
+  const url = memory.inviteUrl || inviteUrl(code);
+  const qrSvg = qrSvgMarkup(url);
+  const qrDownload = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrSvg)}`;
+  return `
+    <div class="sheet-backdrop" data-close-invite-sheet>
+      <section class="invite-sheet" role="dialog" aria-label="Memento invite" data-sheet-panel>
+        <button class="sheet-handle" data-close-invite-sheet aria-label="Close invite"></button>
+        <h2>Hand out the cameras.</h2>
+        <p>Guests scan to join. No app or account needed.</p>
+        <div class="qr-card">
+          <div class="qr-image">${qrSvg}</div>
+          <strong>${escapeHtml(code)}</strong>
+          <span>Invitation code</span>
+          <small>${escapeHtml(url)}</small>
+        </div>
+        <div class="invite-sheet-actions">
+          <button data-share-invite="${escapeHtml(url)}" type="button">${icon('link')}<span>Share link</span></button>
+          <a href="${qrDownload}" download="${escapeHtml(code)}.svg">${icon('download')}<span>Save QR</span></a>
+          <button type="button">${icon('grid')}<span>Invite poster</span></button>
+          <a href="${escapeHtml(url)}">${icon('compass')}<span>Web invite</span></a>
+        </div>
+      </section>
+    </div>`;
+}
+
+function inviteUrl(code = state.inviteCode) {
+  return `${location.origin}/memento/?invite=${encodeURIComponent(code)}`;
+}
+
+function qrSvgMarkup(value) {
+  if (typeof qrcode !== 'function') return '<div class="qr-fallback">QR</div>';
+  const qr = qrcode(0, 'M');
+  qr.addData(value);
+  qr.make();
+  return qr.createSvgTag(5, 3)
+    .replace('<svg ', '<svg role="img" aria-label="Invitation QR code" ')
+    .replace(/<rect/g, '<rect shape-rendering="crispEdges"');
 }
 
 function guestMenu() {
@@ -897,6 +946,11 @@ function icon(name) {
     check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
     lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
     menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>',
+    qr: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M21 14h-2"/><path d="M14 21h7v-3"/></svg>',
+    link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/></svg>',
+    download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
+    grid: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    compass: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16 8-2.2 5.8L8 16l2.2-5.8L16 8Z"/></svg>',
     'flash-off': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/><path d="m2 2 20 20"/></svg>',
     flash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-2 8h7l-7 12 2-8H6l7-12Z"/></svg>',
     flip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg>',
@@ -954,6 +1008,18 @@ function bind() {
     state.guestMenuOpen = !state.guestMenuOpen;
     render();
   });
+  document.querySelector('[data-show-invite-sheet]')?.addEventListener('click', () => {
+    state.inviteSheet = true;
+    render();
+  });
+  document.querySelectorAll('[data-close-invite-sheet]').forEach((button) => button.addEventListener('click', () => {
+    state.inviteSheet = false;
+    render();
+  }));
+  document.querySelector('[data-sheet-panel]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+  document.querySelector('[data-share-invite]')?.addEventListener('click', shareInviteLink);
 
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
   document.querySelectorAll('[data-local-import]').forEach((input) => input.addEventListener('change', importLocalMedia));
@@ -1101,6 +1167,24 @@ function openInvite() {
       render();
     }
   }, 1100);
+}
+
+async function shareInviteLink(event) {
+  const url = event.currentTarget.dataset.shareInvite;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Memento invite', text: 'Join this Memento.', url });
+    } else {
+      await navigator.clipboard?.writeText(url);
+      state.galleryNotice = 'Invite link copied.';
+      state.inviteSheet = false;
+      render();
+    }
+  } catch {
+    state.galleryNotice = 'Could not share invite link.';
+    state.inviteSheet = false;
+    render();
+  }
 }
 
 let lastTouchEnd = 0;

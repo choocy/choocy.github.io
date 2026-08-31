@@ -180,9 +180,27 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .detail-overlay .stats span { display: grid; gap: 1px; }
 .detail-overlay .stats strong { color: white; font-size: 14px; line-height: 1; }
 .detail-body { display: grid; gap: 14px; }
-.detail-actions { padding: 0 2px; }
+.detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 2px; }
+.detail-action-button { min-height: 48px; justify-content: center; gap: 8px; }
+.detail-action-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .local-note { margin: 0; font-size: 13px; color: var(--muted); }
 .gallery-notice { margin: -2px 0 2px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 7px; background: color-mix(in srgb, var(--field), transparent 20%); color: var(--muted); font-size: 13px; }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 70; display: grid; align-items: end; padding: 18px; background: rgb(0 0 0 / 58%); backdrop-filter: blur(3px); }
+.invite-sheet { position: relative; width: min(100%, 560px); max-height: min(86vh, 760px); margin: 0 auto; display: grid; gap: 14px; padding: 28px 20px 22px; overflow: auto; border: 1px solid rgb(255 255 255 / 9%); border-radius: 34px; background: rgb(14 14 14 / 96%); color: white; box-shadow: 0 24px 90px rgb(0 0 0 / 55%); }
+.sheet-handle { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 42px; height: 5px; min-height: 0; padding: 0; border: 0; border-radius: 999px; background: rgb(255 255 255 / 42%); }
+.invite-sheet h2 { margin: 0; color: white; text-align: center; font-family: inherit; font-size: 22px; font-weight: 760; }
+.invite-sheet p { margin: -6px 0 0; color: rgb(255 255 255 / 68%); text-align: center; font-size: 15px; }
+.qr-card { display: grid; justify-items: center; gap: 7px; padding: 18px; border: 1px solid rgb(255 255 255 / 11%); border-radius: 9px; background: rgb(255 255 255 / 4%); }
+.qr-image { width: min(230px, 68vw); aspect-ratio: 1; display: grid; place-items: center; padding: 12px; border-radius: 7px; background: white; }
+.qr-image svg { display: block; width: 100%; height: 100%; }
+.qr-image svg rect:first-child { fill: white; }
+.qr-card strong { color: white; font-size: 15px; letter-spacing: .04em; }
+.qr-card span, .qr-card small { color: rgb(255 255 255 / 62%); font-size: 12px; }
+.qr-card small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.qr-fallback { color: #111; font-weight: 800; }
+.invite-sheet-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.invite-sheet-actions button, .invite-sheet-actions a { min-height: 78px; display: grid; place-items: center; align-content: center; gap: 9px; border: 1px solid rgb(255 255 255 / 10%); border-radius: 7px; background: rgb(255 255 255 / 4%); color: white; text-decoration: none; font-size: 15px; font-weight: 650; }
+.invite-sheet-actions svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .gallery-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
 .gallery-controls { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 650; }
 .name-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--field), transparent 12%); color: var(--muted); font-size: 12px; font-weight: 650; }
