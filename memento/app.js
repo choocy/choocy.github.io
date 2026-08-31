@@ -709,7 +709,7 @@ function mediaTile(item, index, memory) {
   const media = item.locked
     ? `${url ? `<img class="locked-preview" src="${url}" loading="lazy" alt="">` : `<span class="locked-placeholder">${icon('lock')}</span>`}`
     : item.type === 'video'
-    ? `${item.posterUrl ? `<img src="${item.posterUrl}" loading="lazy" alt="">` : `<video src="${url}" muted playsinline preload="metadata"></video>`}<span class="play">${icon('play')}</span>`
+    ? `${item.posterUrl ? `<img src="${item.posterUrl}" loading="lazy" alt="" style="${style}">` : `<video src="${url}" muted playsinline preload="metadata" style="${style}"></video>`}<span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="" style="${style}">`;
   return `<button class="media-tile ${item.locked ? 'locked' : ''}" data-open-media="${index}" type="button">${media}${locked}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
 }
@@ -760,13 +760,13 @@ function viewerMediaElement(item, url, reaction, className, active, memory) {
     return `${preview}<span class="viewer-lock-label">${escapeHtml(item.revealLabel)}</span>`;
   }
   return item.type === 'video'
-    ? `<video class="${classes}" src="${url}" ${active ? 'controls autoplay' : 'muted'} playsinline></video>`
+    ? `<video class="${classes}" src="${url}" ${active ? 'controls autoplay' : 'muted'} playsinline style="${style}"></video>`
     : `<img class="${classes}" src="${url}" alt="" style="${style}">`;
 }
 
 function unlockedMediaFilter(item, memory, reaction = {}) {
   if (reaction.filter) return '';
-  if (!memory || item.locked || item.type !== 'photo') return '';
+  if (!memory || item.locked) return '';
   const filter = filterForStyle(memory);
   return filter === filters.Original ? '' : `filter:${filter}`;
 }
@@ -962,6 +962,9 @@ function bind() {
     if (state.mode === button.dataset.mode) return;
     state.mode = button.dataset.mode;
     updateCameraMode();
+    const video = document.querySelector('.camera video');
+    const label = document.querySelector('.camera-label');
+    if (video && label) openCameraStream(video, label);
   }));
   document.querySelector('[data-open-invite]')?.addEventListener('click', openInvite);
 
@@ -1251,6 +1254,7 @@ let recordedChunks = [];
 let flashMode = false;
 let viewerAnimationTimer = null;
 let recordingStartedAt = 0;
+let streamHasAudio = false;
 
 function startCamera() {
   const memory = currentMemory();
@@ -1286,6 +1290,12 @@ function startCamera() {
         stopRecordingVideo();
         return;
       }
+      try {
+        await ensureVideoAudioStream(video, label);
+      } catch {
+        updateCameraMode();
+        return;
+      }
       startRecordingVideo(memory, () => {
         const remaining = remainingFor(memory, 'video');
         event.currentTarget.disabled = remaining === 0;
@@ -1314,8 +1324,10 @@ function startCamera() {
 function openCameraStream(video, label) {
   stopCamera();
   label.textContent = 'Starting camera';
-  navigator.mediaDevices?.getUserMedia({ video: { facingMode }, audio: false }).then((stream) => {
+  const wantsAudio = state.mode === 'video';
+  navigator.mediaDevices?.getUserMedia({ video: { facingMode }, audio: wantsAudio }).then((stream) => {
     activeStream = stream;
+    streamHasAudio = wantsAudio && stream.getAudioTracks().length > 0;
     activeTrack = stream.getVideoTracks()[0] || null;
     video.srcObject = stream;
     video.muted = true;
@@ -1338,6 +1350,29 @@ function stopCamera() {
   activeStream?.getTracks().forEach((track) => track.stop());
   activeStream = null;
   activeTrack = null;
+  streamHasAudio = false;
+}
+
+async function ensureVideoAudioStream(video, label) {
+  if (streamHasAudio || !navigator.mediaDevices?.getUserMedia) return;
+  label.textContent = 'Starting microphone';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: true });
+    stopCamera();
+    activeStream = stream;
+    streamHasAudio = stream.getAudioTracks().length > 0;
+    activeTrack = stream.getVideoTracks()[0] || null;
+    video.srcObject = stream;
+    video.muted = true;
+    video.setAttribute('playsinline', '');
+    await video.play().catch(() => {});
+    bindZoomIfSupported(stream);
+    bindFlashIfSupported();
+    label.textContent = streamHasAudio ? 'Camera ready' : 'Recording without sound';
+  } catch {
+    label.textContent = 'Microphone permission needed';
+    throw new Error('microphone permission needed');
+  }
 }
 
 function bindZoomIfSupported(stream) {
@@ -1557,7 +1592,7 @@ function stopRecordingVideo() {
 }
 
 function supportedVideoMimeType() {
-  const types = ['video/mp4;codecs=h264', 'video/mp4'];
+  const types = ['video/mp4;codecs=h264', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
   return types.find((type) => MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -1571,7 +1606,7 @@ async function uploadCapture(memory, item, blob, contentType) {
     throw new Error('Memento has ended');
   }
   const extension = contentType.includes('video') ? videoExtension(contentType) : 'jpg';
-  const uploadType = item.type === 'video' ? 'video/mp4' : contentType;
+  const uploadType = contentType;
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
   const thumbnailPath = `mementos/${memory.id}/thumbs/${item.id}.jpg`;
   const thumbnailBlob = await generateBlurredThumbnail(item, blob).catch(() => null);
