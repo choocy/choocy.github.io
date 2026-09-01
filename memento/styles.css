@@ -156,7 +156,16 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .event-meta { display: flex; justify-content: center; align-items: center; gap: 10px; margin: -5px 0 0; color: rgb(255 255 255 / 70%); font-size: 14px; }
 .event-meta span { width: 5px; height: 5px; border-radius: 50%; background: rgb(255 255 255 / 32%); }
 .name-pill { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 22px; border-radius: 22px; background: rgb(28 28 28 / 82%); color: rgb(255 255 255 / 46%); text-align: left; backdrop-filter: blur(20px); }
+.name-trigger { width: 100%; border: 0; }
+.name-trigger span { color: rgb(255 255 255 / 56%); font-size: 18px; }
 .name-pill input { min-height: 0; padding: 0; border: 0; background: transparent; color: white; font-size: 18px; outline: none; }
+.name-sheet-backdrop { position: fixed; inset: 0; z-index: 45; display: grid; align-items: end; padding: 18px 18px max(18px, env(safe-area-inset-bottom)); background: rgb(0 0 0 / 38%); color: white; }
+.name-sheet { display: grid; gap: 13px; width: min(520px, 100%); margin: 0 auto; padding: 18px; border: 1px solid rgb(255 255 255 / 12%); border-radius: 24px; background: rgb(18 18 18 / 92%); box-shadow: 0 22px 60px rgb(0 0 0 / 38%); backdrop-filter: blur(22px); }
+.name-sheet h2 { color: white; font-family: inherit; font-size: 18px; font-weight: 720; text-align: center; }
+.name-sheet-close { justify-self: end; display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: -6px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 10%); color: white; }
+.name-sheet-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
+.sheet-name-pill { min-height: 56px; border-radius: 18px; background: rgb(255 255 255 / 8%); }
+.sheet-name-pill input { font-size: 17px; }
 .welcome-back { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; margin: 0; border: 1px solid rgb(31 217 111 / 38%); border-radius: 16px; background: rgb(8 58 32 / 56%); color: white; font-size: 15px; font-weight: 700; backdrop-filter: blur(18px); }
 .welcome-back svg { width: 17px; height: 17px; padding: 4px; border-radius: 999px; background: #22e879; color: #062512; stroke-width: 3; }
 .join-bottom-actions .form-error { padding: 11px 13px; border: 1px solid rgb(255 112 112 / 28%); border-radius: 14px; background: rgb(82 18 18 / 68%); color: #ffe1e1; backdrop-filter: blur(16px); }

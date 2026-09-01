@@ -33,6 +33,7 @@ const state = {
   loading: true,
   error: '',
   joinError: '',
+  nameSheetOpen: false,
   galleryNotice: '',
   guestMenuOpen: false,
   memories: [],
@@ -640,6 +641,16 @@ function join() {
   const available = `${photoRemaining} ${photoRemaining === 1 ? 'shot' : 'shots'}${memory.videos ? `, ${videoRemaining} ${videoRemaining === 1 ? 'video' : 'videos'}` : ''} available`;
   const ended = eventEnded(memory);
   const actionText = `Continue to event ${icon('arrow-right')}`;
+  const nameSheet = state.nameSheetOpen && !returningGuest ? `
+    <div class="name-sheet-backdrop" data-close-name-sheet>
+      <form class="name-sheet" data-join-form>
+        <button class="name-sheet-close" type="button" data-close-name-sheet aria-label="Close name entry">${icon('close')}</button>
+        <h2>Join ${escapeHtml(memory.title)}</h2>
+        <label class="name-pill sheet-name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required autofocus></label>
+        ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+        <button class="take-camera" type="submit" ${ended ? 'disabled' : ''}>${ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+      </form>
+    </div>` : '';
 
   return `
     <section class="join-hero ${returningGuest ? 'returning-join' : 'name-join'}">
@@ -652,12 +663,13 @@ function join() {
           <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
         </div>
         <div class="join-bottom-actions">
-          ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : `<label class="name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required></label>`}
-          ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-          <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="submit"'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+          ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : `<button class="name-pill name-trigger" type="button" data-open-name-sheet>${icon('edit')}<span>Enter your name</span></button>`}
+          ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+          <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
         </div>
       </form>
-    </section>`;
+    </section>
+    ${nameSheet}`;
 }
 
 function memoryCard(memory) {
@@ -1101,6 +1113,17 @@ function bind() {
     render();
   }));
   document.querySelector('[data-join-form]')?.addEventListener('submit', joinMemento);
+  document.querySelectorAll('[data-open-name-sheet]').forEach((button) => button.addEventListener('click', () => {
+    state.joinError = '';
+    state.nameSheetOpen = true;
+    render();
+  }));
+  document.querySelectorAll('[data-close-name-sheet]').forEach((element) => element.addEventListener('click', (event) => {
+    if (event.target !== element && element.classList.contains('name-sheet-backdrop')) return;
+    state.nameSheetOpen = false;
+    render();
+  }));
+  document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
     state.mode = button.dataset.mode;
@@ -1238,6 +1261,7 @@ async function joinMemento(event) {
   if (!memory || !name) return;
 
   state.joinError = '';
+  state.nameSheetOpen = true;
   const normalized = normalizeName(name);
   if (memory.memberNames.includes(normalized)) {
     state.joinError = 'This name has already joined. Please use a different name.';
@@ -1264,6 +1288,7 @@ async function joinMemento(event) {
       name: joined.display_name,
     });
     state.selectedId = joined.memento_id;
+    state.nameSheetOpen = false;
     await loadMemories();
     setView('detail', joined.memento_id);
   } catch {
