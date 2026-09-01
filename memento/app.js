@@ -1448,15 +1448,12 @@ function rememberLocalCapture(memoryId, item) {
 function markCapture(memoryId, itemId, sync) {
   const list = state.localCaptures.get(memoryId) || [];
   const memory = state.memories.find((entry) => entry.id === memoryId);
-  if (sync === 'Uploaded' && memory && !memory.revealed) {
+  if (sync === 'Uploaded') {
     updateLastShotStatus(sync);
+    state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
+    loadMemories({ quiet: true, renderOnlyWhenChanged: state.view === 'camera' });
     if (state.view === 'camera') {
-      const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
-      state.localCaptures.set(memoryId, next);
       updateCameraMode();
-    } else {
-      state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
-      loadMemories({ quiet: true });
     }
     return;
   }
@@ -1483,6 +1480,7 @@ let recordingStartedAt = 0;
 let streamHasAudio = false;
 let recordingCanvas = null;
 let recordingDrawFrame = 0;
+let photoCaptureInFlight = false;
 
 function startCamera() {
   const memory = currentMemory();
@@ -1535,7 +1533,8 @@ function startCamera() {
       return;
     }
     let photos = remainingFor(memory, 'photo');
-    if (photos <= 0) return;
+    if (photos <= 0 || photoCaptureInFlight) return;
+    photoCaptureInFlight = true;
     event.currentTarget.disabled = true;
     try {
       const photo = await capturePhoto(video);
@@ -1547,6 +1546,7 @@ function startCamera() {
     } catch (error) {
       label.textContent = `Could not capture photo${error?.message ? `: ${error.message}` : ''}`;
     } finally {
+      photoCaptureInFlight = false;
       event.currentTarget.disabled = remainingFor(memory, 'photo') === 0 || !activeStream;
     }
   });
@@ -1907,6 +1907,8 @@ function supportedVideoMimeType() {
 }
 
 async function uploadCapture(memory, item, blob, contentType) {
+  if (item.uploadStarted) return;
+  item.uploadStarted = true;
   if (!state.guest?.memberId) throw new Error('Missing guest member');
   const endTime = memory.endTime?.getTime?.();
   const capturedAfterEnd = endTime && item.capturedAt && item.capturedAt >= endTime;
