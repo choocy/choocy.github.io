@@ -25,9 +25,6 @@ const inviteFromPath = explicitInvitePathIndex >= 0
   ? routeParts[explicitInvitePathIndex + 1]
   : routeParts[mementoPathIndex + 1];
 const inviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
-const viewportReloadParam = 'memento_vp_refresh';
-
-runInviteViewportRefresh();
 
 const state = {
   view: inviteCode ? 'invite' : 'home',
@@ -58,31 +55,8 @@ const state = {
 let revealRefreshTimer = null;
 let eventRefreshTimer = null;
 let gallerySyncTimer = null;
-
-function runInviteViewportRefresh() {
-  if (!inviteCode || routeParams.get(viewportReloadParam) === '1') {
-    cleanViewportRefreshParam();
-    return;
-  }
-  const key = `memento-vp-refresh:${inviteCode}`;
-  try {
-    if (sessionStorage.getItem(key)) return;
-    sessionStorage.setItem(key, '1');
-  } catch {
-    return;
-  }
-  routeParams.set(viewportReloadParam, '1');
-  const nextUrl = `${location.pathname}?${routeParams.toString()}${location.hash}`;
-  location.replace(nextUrl);
-}
-
-function cleanViewportRefreshParam() {
-  if (routeParams.get(viewportReloadParam) !== '1') return;
-  routeParams.delete(viewportReloadParam);
-  const query = routeParams.toString();
-  const cleanUrl = `${location.pathname}${query ? `?${query}` : ''}${location.hash}`;
-  history.replaceState(null, '', cleanUrl);
-}
+let viewportHeight = 0;
+let viewportTop = 0;
 
 function headers() {
   return {
@@ -531,18 +505,28 @@ document.addEventListener('visibilitychange', () => {
 
 function syncViewportHeight() {
   const viewport = window.visualViewport;
-  const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
-  const top = viewport?.offsetTop || 0;
+  const height = Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
+  const top = Math.round(viewport?.offsetTop || 0);
   if (!height) return;
-  document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
-  document.documentElement.style.setProperty('--app-top', `${Math.round(top)}px`);
+  if (height === viewportHeight && top === viewportTop) return;
+  viewportHeight = height;
+  viewportTop = top;
+  document.documentElement.style.setProperty('--app-height', `${height}px`);
+  document.documentElement.style.setProperty('--app-top', `${top}px`);
   if (['invite', 'loading', 'join'].includes(state.view)) window.scrollTo(0, 0);
 }
 
 function stabilizeJoinViewport() {
   syncViewportHeight();
   if (!['invite', 'loading', 'join'].includes(state.view)) return;
-  [0, 40, 120, 280, 560, 1000, 1600].forEach((delay) => window.setTimeout(syncViewportHeight, delay));
+  [0, 40, 120, 280, 560, 1000, 1600, 2400].forEach((delay) => window.setTimeout(syncViewportHeight, delay));
+  let frames = 0;
+  const watch = () => {
+    syncViewportHeight();
+    frames += 1;
+    if (frames < 90 && ['invite', 'loading', 'join'].includes(state.view)) requestAnimationFrame(watch);
+  };
+  requestAnimationFrame(watch);
 }
 
 window.addEventListener('resize', syncViewportHeight);
