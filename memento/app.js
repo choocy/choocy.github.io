@@ -662,9 +662,9 @@ function join() {
           <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
         </div>
         <div class="join-bottom-actions">
-          ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : `<button class="name-pill name-trigger" type="button" data-open-name-sheet>${icon('edit')}<span>Enter your name</span></button>`}
+          ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : ''}
           ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-          <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+          <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
         </div>
       </form>
     </section>
