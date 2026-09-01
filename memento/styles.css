@@ -143,10 +143,10 @@ input { width: 100%; min-height: 45px; border: 1px solid var(--line); border-rad
 .loading-center p { margin: 0; color: rgb(255 255 255 / 70%); }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 4px solid rgb(255 255 255 / 22%); border-top-color: rgb(255 255 255 / 72%); animation: spin .9s linear infinite; }
 .join-bg { opacity: .88; filter: brightness(.86); transform: none; }
-.join-hero { display: grid; align-items: end; padding: max(102px, calc(env(safe-area-inset-top) + 92px)) 22px max(58px, calc(env(safe-area-inset-bottom) + 18px)); }
+.join-hero { display: grid; align-items: end; padding: max(102px, calc(env(safe-area-inset-top) + 92px)) 22px max(86px, calc(env(safe-area-inset-bottom) + 46px)); }
 html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .join-overlay-card { position: relative; z-index: 2; display: grid; gap: 18px; width: min(520px, 100%); margin: 0 auto; text-align: center; }
-.join-overlay-card.returning { min-height: min(calc(var(--app-height) - 88px), 740px); align-content: end; grid-template-rows: 1fr auto; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.join-overlay-card.returning { min-height: min(calc(var(--app-height) - 112px), 720px); align-content: end; grid-template-rows: 1fr auto; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .join-event-copy { align-self: end; display: grid; gap: 14px; padding-bottom: clamp(14px, 4dvh, 34px); }
 .join-bottom-actions { display: grid; gap: 11px; }
 .invited-by { justify-self: center; display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 8px 13px; border-radius: 999px; background: rgb(255 255 255 / 24%); color: rgb(255 255 255 / 72%); font-size: 13px; backdrop-filter: blur(18px); }
@@ -322,7 +322,7 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
   .summary { grid-template-columns: 86px 1fr; }
   .summary img { width: 86px; height: 104px; }
   .cropper { min-height: 330px; }
-  .join-hero { padding: max(98px, calc(env(safe-area-inset-top) + 88px)) 18px max(58px, calc(env(safe-area-inset-bottom) + 18px)); }
+  .join-hero { padding: max(98px, calc(env(safe-area-inset-top) + 88px)) 18px max(86px, calc(env(safe-area-inset-bottom) + 46px)); }
   .join-overlay-card { gap: 16px; width: min(100%, 480px); }
   .join-overlay-card h1 { font-size: clamp(32px, 8.8vw, 46px); }
   .event-meta { font-size: 13px; }
