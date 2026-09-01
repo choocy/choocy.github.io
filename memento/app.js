@@ -433,9 +433,8 @@ function escapeHtml(value) {
 }
 
 function imageMarkup(memory, className = '') {
-  const filter = filterForStyle(memory);
   if (!memory.cover) return `<div class="cover-placeholder ${className}"><span>${escapeHtml(memory.title)}</span></div>`;
-  return `<img class="${className}" src="${memory.cover}" alt="" style="filter:${filter}">`;
+  return `<img class="${className}" src="${memory.cover}" alt="">`;
 }
 
 function filterForStyle(memory) {
@@ -913,8 +912,7 @@ function viewerMediaElement(item, url, reaction, className, active, memory) {
 function unlockedMediaFilter(item, memory, reaction = {}) {
   if (reaction.filter) return '';
   if (!memory || item.locked) return '';
-  const filter = filterForStyle(memory);
-  return filter === filters.Original ? '' : `filter:${filter}`;
+  return '';
 }
 
 function viewerIndex(total, step) {
@@ -1537,7 +1535,7 @@ function startCamera() {
     photoCaptureInFlight = true;
     event.currentTarget.disabled = true;
     try {
-      const photo = await capturePhoto(video);
+      const photo = await capturePhoto(video, filterForStyle(memory));
       photos = Math.max(0, photos - 1);
       const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), capturedAt: Date.now(), sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
@@ -1678,9 +1676,9 @@ function toggleFlash() {
   if (button) button.innerHTML = icon(flashMode ? 'flash' : 'flash-off');
 }
 
-async function capturePhoto(video) {
+async function capturePhoto(video, filter = filters.Original) {
   await ensureCameraReady(video);
-  if (activeTrack && typeof ImageCapture !== 'undefined') {
+  if (activeTrack && typeof ImageCapture !== 'undefined' && filter === filters.Original) {
     try {
       const imageCapture = new ImageCapture(activeTrack);
       const blob = await imageCapture.takePhoto();
@@ -1692,7 +1690,7 @@ async function capturePhoto(video) {
       try {
         const imageCapture = new ImageCapture(activeTrack);
         const bitmap = await imageCapture.grabFrame();
-        return canvasPhotoFromSource(bitmap, bitmap.width, bitmap.height);
+        return canvasPhotoFromSource(bitmap, bitmap.width, bitmap.height, filter);
       } catch {
         // Canvas capture below works on browsers without ImageCapture support.
       }
@@ -1701,7 +1699,7 @@ async function capturePhoto(video) {
   const settings = activeTrack?.getSettings?.() || {};
   const width = video.videoWidth || settings.width || 1280;
   const height = video.videoHeight || settings.height || 720;
-  return canvasPhotoFromSource(video, width, height);
+  return canvasPhotoFromSource(video, width, height, filter);
 }
 
 async function canvasPhotoFromSource(source, width, height, filter = filters.Original) {
