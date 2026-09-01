@@ -645,7 +645,6 @@ function join() {
     <div class="name-sheet-backdrop" data-close-name-sheet>
       <form class="name-sheet" data-join-form>
         <button class="name-sheet-close" type="button" data-close-name-sheet aria-label="Close name entry">${icon('close')}</button>
-        <h2>Join ${escapeHtml(memory.title)}</h2>
         <label class="name-pill sheet-name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required autofocus></label>
         ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
         <button class="take-camera" type="submit" ${ended ? 'disabled' : ''}>${ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
