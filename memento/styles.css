@@ -160,7 +160,7 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .name-trigger span { color: rgb(255 255 255 / 56%); font-size: 18px; }
 .name-pill input { min-height: 0; padding: 0; border: 0; background: transparent; color: white; font-size: 18px; outline: none; }
 .name-sheet-backdrop { position: fixed; inset: 0; z-index: 45; display: grid; align-items: end; padding: 18px 18px max(18px, env(safe-area-inset-bottom)); background: rgb(0 0 0 / 22%); color: white; backdrop-filter: blur(2px); }
-.name-sheet { display: grid; gap: 11px; width: min(520px, 100%); margin: 0 auto; padding: 12px; border: 1px solid rgb(255 255 255 / 12%); border-radius: 24px; background: rgb(18 18 18 / 72%); box-shadow: 0 22px 60px rgb(0 0 0 / 28%); backdrop-filter: blur(24px); }
+.name-sheet { display: grid; gap: 11px; width: min(520px, 100%); margin: 0 auto; padding: 12px; border: 1px solid rgb(255 255 255 / 12%); border-radius: 24px; background: #070707; box-shadow: 0 22px 60px rgb(0 0 0 / 28%); }
 .name-sheet-close { justify-self: end; display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: -4px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 10%); color: white; }
 .name-sheet-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
 .sheet-name-pill { min-height: 52px; border-radius: 18px; background: rgb(255 255 255 / 10%); }
