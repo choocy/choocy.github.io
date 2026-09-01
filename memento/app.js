@@ -17,6 +17,15 @@ const FEATURES = {
   albumImport: false,
 };
 
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in private browsing; the URL remains the source of truth.
+  }
+}
+
 const routeParams = new URLSearchParams(location.search);
 const routeParts = location.pathname.split('/').map(decodeURIComponent).filter(Boolean);
 const explicitInvitePathIndex = routeParts.findIndex((part) => ['invite', 'join'].includes(part.toLowerCase()));
@@ -24,7 +33,9 @@ const mementoPathIndex = routeParts.findIndex((part) => part.toLowerCase() === '
 const inviteFromPath = explicitInvitePathIndex >= 0
   ? routeParts[explicitInvitePathIndex + 1]
   : routeParts[mementoPathIndex + 1];
-const inviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
+const routeInviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
+const inviteCode = routeInviteCode;
+if (routeInviteCode) storageSet('memento_last_invite_code', routeInviteCode);
 
 const state = {
   view: inviteCode ? 'invite' : 'home',
@@ -120,6 +131,7 @@ async function uploadStorageObject(path, blob, contentType) {
 
 async function loadMemories(options = {}) {
   const previousSignature = gallerySignature();
+  preserveInviteInUrl();
   state.loading = true;
   state.error = '';
   if (!options.quiet) render();
@@ -446,6 +458,16 @@ function setView(next, id) {
   if (id) state.selectedId = id;
   render();
   if (next === 'camera') startCamera();
+}
+
+function preserveInviteInUrl() {
+  if (!state.inviteCode) return;
+  storageSet('memento_last_invite_code', state.inviteCode);
+  const params = new URLSearchParams(location.search);
+  if (params.get('invite') === state.inviteCode) return;
+  params.set('invite', state.inviteCode);
+  const nextUrl = `${location.pathname}?${params.toString()}${location.hash}`;
+  history.replaceState(history.state, '', nextUrl);
 }
 
 function scheduleRevealRefresh() {
@@ -1020,6 +1042,7 @@ function updateCameraMode() {
 
 function render() {
   syncViewportHeight();
+  preserveInviteInUrl();
   const app = document.getElementById('app');
   const page = state.view === 'invite' ? invite() : state.view === 'loading' ? loading() : state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
   const memory = currentMemory();
