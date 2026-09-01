@@ -51,12 +51,14 @@ const state = {
   mode: 'photo',
   recording: false,
   recordingSecondsLeft: 0,
+  viewportSettled: false,
 };
 let revealRefreshTimer = null;
 let eventRefreshTimer = null;
 let gallerySyncTimer = null;
 let viewportHeight = 0;
 let viewportTop = 0;
+let viewportSettlingView = '';
 
 function headers() {
   return {
@@ -519,6 +521,16 @@ function syncViewportHeight() {
 function stabilizeJoinViewport() {
   syncViewportHeight();
   if (!['invite', 'loading', 'join'].includes(state.view)) return;
+  if (viewportSettlingView !== state.view) {
+    viewportSettlingView = state.view;
+    state.viewportSettled = false;
+    document.documentElement.classList.remove('viewport-settled');
+    window.setTimeout(() => {
+      if (viewportSettlingView !== state.view) return;
+      state.viewportSettled = true;
+      document.documentElement.classList.add('viewport-settled');
+    }, 320);
+  }
   [0, 40, 120, 280, 560, 1000, 1600, 2400].forEach((delay) => window.setTimeout(syncViewportHeight, delay));
   let frames = 0;
   const watch = () => {
