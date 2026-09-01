@@ -25,6 +25,9 @@ const inviteFromPath = explicitInvitePathIndex >= 0
   ? routeParts[explicitInvitePathIndex + 1]
   : routeParts[mementoPathIndex + 1];
 const inviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
+const viewportReloadParam = 'memento_vp_refresh';
+
+runInviteViewportRefresh();
 
 const state = {
   view: inviteCode ? 'invite' : 'home',
@@ -55,6 +58,31 @@ const state = {
 let revealRefreshTimer = null;
 let eventRefreshTimer = null;
 let gallerySyncTimer = null;
+
+function runInviteViewportRefresh() {
+  if (!inviteCode || routeParams.get(viewportReloadParam) === '1') {
+    cleanViewportRefreshParam();
+    return;
+  }
+  const key = `memento-vp-refresh:${inviteCode}`;
+  try {
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+  } catch {
+    return;
+  }
+  routeParams.set(viewportReloadParam, '1');
+  const nextUrl = `${location.pathname}?${routeParams.toString()}${location.hash}`;
+  location.replace(nextUrl);
+}
+
+function cleanViewportRefreshParam() {
+  if (routeParams.get(viewportReloadParam) !== '1') return;
+  routeParams.delete(viewportReloadParam);
+  const query = routeParams.toString();
+  const cleanUrl = `${location.pathname}${query ? `?${query}` : ''}${location.hash}`;
+  history.replaceState(null, '', cleanUrl);
+}
 
 function headers() {
   return {
