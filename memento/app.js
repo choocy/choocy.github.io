@@ -503,21 +503,23 @@ document.addEventListener('visibilitychange', () => {
 
 function syncViewportHeight() {
   const viewport = window.visualViewport;
-  const height = Math.max(viewport?.height || 0, window.innerHeight || 0);
+  const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
   const top = viewport?.offsetTop || 0;
   if (!height) return;
   document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
   document.documentElement.style.setProperty('--app-top', `${Math.round(top)}px`);
-  if (state.view === 'join') window.scrollTo(0, 0);
+  if (['invite', 'loading', 'join'].includes(state.view)) window.scrollTo(0, 0);
 }
 
 function stabilizeJoinViewport() {
   syncViewportHeight();
-  if (state.view !== 'join') return;
-  [80, 240, 520, 900].forEach((delay) => window.setTimeout(syncViewportHeight, delay));
+  if (!['invite', 'loading', 'join'].includes(state.view)) return;
+  [0, 40, 120, 280, 560, 1000, 1600].forEach((delay) => window.setTimeout(syncViewportHeight, delay));
 }
 
 window.addEventListener('resize', syncViewportHeight);
+window.addEventListener('orientationchange', stabilizeJoinViewport);
+window.addEventListener('pageshow', stabilizeJoinViewport);
 window.visualViewport?.addEventListener('resize', syncViewportHeight);
 window.visualViewport?.addEventListener('scroll', syncViewportHeight);
 
@@ -984,6 +986,7 @@ function updateCameraMode() {
 }
 
 function render() {
+  syncViewportHeight();
   const app = document.getElementById('app');
   const page = state.view === 'invite' ? invite() : state.view === 'loading' ? loading() : state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
   app.innerHTML = topbar() + page;
@@ -996,6 +999,10 @@ function render() {
 }
 
 function bind() {
+  document.querySelectorAll('.join-bg-image, .invite-backdrop-image').forEach((image) => {
+    if (image.complete) return;
+    image.addEventListener('load', stabilizeJoinViewport, { once: true });
+  });
   document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
     setView(button.dataset.view, button.dataset.id);
   }));
