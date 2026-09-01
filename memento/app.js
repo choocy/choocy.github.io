@@ -677,7 +677,7 @@ function join() {
     <section class="join-hero ${returningGuest ? 'returning-join' : 'name-join'}">
       ${appBanner()}
       <div class="join-bg">${imageMarkup(memory, 'join-bg-image')}</div>
-      <form class="join-overlay-card ${returningGuest ? 'returning' : ''}" ${returningGuest ? '' : 'data-join-form'}>
+      <div class="join-overlay-card ${returningGuest ? 'returning' : ''}">
         <div class="join-event-copy">
           <p class="invited-by">${icon('users')} Invited by Memento</p>
           <h1>${escapeHtml(memory.title)}</h1>
@@ -688,7 +688,7 @@ function join() {
           ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
           <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
         </div>
-      </form>
+      </div>
     </section>
     ${nameSheet}`;
 }
@@ -1134,7 +1134,7 @@ function bind() {
     state.reactions.set(button.dataset.filter, { ...current, filter: button.dataset.filterValue });
     render();
   }));
-  document.querySelector('[data-join-form]')?.addEventListener('submit', joinMemento);
+  document.querySelectorAll('[data-join-form]').forEach((form) => form.addEventListener('submit', joinMemento));
   document.querySelectorAll('[data-open-name-sheet]').forEach((button) => button.addEventListener('click', () => {
     state.joinError = '';
     state.nameSheetOpen = true;
