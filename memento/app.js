@@ -762,7 +762,7 @@ function detail() {
   const memory = currentMemory();
   if (!memory) return emptyState();
   const inviteAction = memory.inviteCode ? `<button class="ghost detail-action-button" data-show-invite-sheet type="button">${icon('qr')} Invite</button>` : '';
-  const cameraAction = !memory.ended && cameraSupported() ? `<button class="ink detail-action-button" data-view="camera" data-id="${memory.id}">${icon('camera')} Camera</button>` : '';
+  const cameraAction = !memory.ended && cameraSupported() ? `<button class="ghost detail-action-button" data-view="camera" data-id="${memory.id}">${icon('camera')} Camera</button>` : '';
   const actions = memory.ended ? `${inviteAction}<p class="event-status">Memento has ended</p>` : `${inviteAction}${cameraAction}`;
 
   return `
@@ -842,9 +842,9 @@ function guestGallery(memory) {
   const toggle = `
     <div class="gallery-heading">
       <h2>Gallery</h2>
-      <div class="gallery-controls"><span>${escapeHtml(momentLabel)}</span><label class="name-toggle">Names <input type="checkbox" data-captured-toggle ${state.showCapturedBy ? 'checked' : ''}></label></div>
+      <div class="gallery-controls"><span class="gallery-count">${icon('eye')} ${escapeHtml(momentLabel)}</span><label class="name-toggle">Names <input type="checkbox" data-captured-toggle ${state.showCapturedBy ? 'checked' : ''}></label></div>
     </div>`;
-  if (!items.length) return `${toggle}<section class="guest-gallery empty-gallery"><p>No moments yet.</p></section>`;
+  if (!items.length) return `${toggle}<section class="guest-gallery empty-gallery">${icon('image')}<strong>No moments yet</strong><p>Photos and videos taken here will appear in this gallery.</p></section>`;
   return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index, memory)).join('')}</section>`;
 }
 
@@ -999,6 +999,8 @@ function icon(name) {
     users: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
     camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>',
+    image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
     edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 9-9-4-4-9 9-2 6 6-2Z"/><path d="m15 6 4 4"/></svg>',
     'arrow-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
     check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
