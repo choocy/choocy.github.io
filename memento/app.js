@@ -642,7 +642,7 @@ function join() {
   const actionText = `Continue to event ${icon('arrow-right')}`;
 
   return `
-    <section class="join-hero">
+    <section class="join-hero ${returningGuest ? 'returning-join' : 'name-join'}">
       ${appBanner()}
       <div class="join-bg">${imageMarkup(memory, 'join-bg-image')}</div>
       <form class="join-overlay-card ${returningGuest ? 'returning' : ''}" ${returningGuest ? '' : 'data-join-form'}>
@@ -1011,10 +1011,12 @@ function render() {
   syncViewportHeight();
   const app = document.getElementById('app');
   const page = state.view === 'invite' ? invite() : state.view === 'loading' ? loading() : state.view === 'join' ? join() : state.view === 'home' ? home() : state.view === 'detail' ? detail() : camera();
+  const memory = currentMemory();
   app.innerHTML = topbar() + page;
   bind();
   document.documentElement.classList.toggle('camera-open', state.view === 'camera');
   document.documentElement.classList.toggle('join-open', state.view === 'join');
+  document.documentElement.classList.toggle('join-returning', state.view === 'join' && Boolean(memory) && state.guest?.mementoId === memory.id);
   document.documentElement.classList.toggle('viewer-open', state.viewer != null);
   stabilizeJoinViewport();
   scheduleGallerySync();
