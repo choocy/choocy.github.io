@@ -842,9 +842,9 @@ function guestGallery(memory) {
   const toggle = `
     <div class="gallery-heading">
       <h2>Gallery</h2>
-      <div class="gallery-controls"><span class="gallery-count">${icon('eye')} ${escapeHtml(momentLabel)}</span><label class="name-toggle">Names <input type="checkbox" data-captured-toggle ${state.showCapturedBy ? 'checked' : ''}></label></div>
+      <div class="gallery-controls"><button class="name-eye-toggle" type="button" data-captured-toggle aria-label="${state.showCapturedBy ? 'Hide names' : 'Show names'}">${icon(state.showCapturedBy ? 'eye' : 'eye-off')}</button><span class="gallery-count">${escapeHtml(momentLabel)}</span></div>
     </div>`;
-  if (!items.length) return `${toggle}<section class="guest-gallery empty-gallery">${icon('image')}<strong>No moments yet</strong><p>Photos and videos taken here will appear in this gallery.</p></section>`;
+  if (!items.length) return `${toggle}<section class="empty-gallery">${icon('image')}<strong>No moments yet</strong><p>Photos and videos taken here will appear in this gallery.</p></section>`;
   return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index, memory)).join('')}</section>`;
 }
 
@@ -1001,6 +1001,7 @@ function icon(name) {
     camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>',
     image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>',
     eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    'eye-off': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.7 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.5 17.5 0 0 1-3.2 4.1"/><path d="M6.6 6.6A17.8 17.8 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4.4-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M2 2l20 20"/></svg>',
     edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 9-9-4-4-9 9-2 6 6-2Z"/><path d="m15 6 4 4"/></svg>',
     'arrow-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
     check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
@@ -1092,8 +1093,8 @@ function bind() {
 
   document.querySelector('[data-reload]')?.addEventListener('click', loadMemories);
   document.querySelectorAll('[data-local-import]').forEach((input) => input.addEventListener('change', importLocalMedia));
-  document.querySelector('[data-captured-toggle]')?.addEventListener('change', (event) => {
-    saveCapturedByPreference(event.currentTarget.checked);
+  document.querySelector('[data-captured-toggle]')?.addEventListener('click', () => {
+    saveCapturedByPreference(!state.showCapturedBy);
     render();
   });
   document.querySelectorAll('[data-open-media]').forEach((button) => button.addEventListener('click', () => {

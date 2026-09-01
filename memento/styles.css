@@ -216,11 +216,10 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .invite-sheet-actions svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .gallery-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; }
 .gallery-heading h2 { font-size: 30px; line-height: 1; }
-.gallery-controls { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 650; }
-.gallery-count { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--muted); font-size: 14px; line-height: 1; }
-.gallery-count svg { width: 42px; height: 42px; padding: 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; background: color-mix(in srgb, var(--field), transparent 16%); }
-.name-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--field), transparent 18%); color: var(--muted); font-size: 12px; font-weight: 650; line-height: 1; }
-.name-toggle input { width: 15px; height: 15px; min-height: 0; accent-color: var(--ink); }
+.gallery-controls { display: inline-flex; align-items: center; gap: 14px; color: var(--muted); font-size: 13px; font-weight: 650; }
+.name-eye-toggle { width: 42px; height: 42px; min-height: 0; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--field), transparent 16%); color: var(--ink); }
+.name-eye-toggle svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+.gallery-count { white-space: nowrap; color: var(--muted); font-size: 14px; line-height: 1; }
 .guest-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; align-items: start; }
 .media-tile { position: relative; min-height: 0; aspect-ratio: 4 / 5; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--field); padding: 0; color: inherit; }
 .media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; }
@@ -234,7 +233,7 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .captured-pill { position: absolute; left: 6px; bottom: 28px; z-index: 2; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-radius: 999px; background: rgb(0 0 0 / 42%); color: white; font-size: 10px; font-weight: 650; line-height: 1; backdrop-filter: blur(12px); }
 .media-tile .play { position: absolute; inset: 0; display: grid; place-items: center; color: white; }
 .media-tile .play svg { width: 34px; height: 34px; fill: rgb(255 255 255 / 88%); stroke: none; filter: drop-shadow(0 2px 8px rgb(0 0 0 / 60%)); }
-.empty-gallery { min-height: 180px; display: grid; place-items: center; align-content: center; gap: 10px; padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: center; }
+.empty-gallery { min-height: 180px; display: grid; place-items: center; align-content: center; justify-items: center; gap: 10px; padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: center; }
 .empty-gallery svg { width: 30px; height: 30px; color: var(--ink); fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.9; }
 .empty-gallery strong { color: var(--ink); font-size: 18px; font-weight: 650; line-height: 1.1; }
 .empty-gallery p { max-width: 420px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.35; }
@@ -345,10 +344,10 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
   .detail-actions { gap: 6px; padding: 6px; }
   .detail-action-button { min-height: 40px; font-size: 13px; gap: 8px; }
   .gallery-heading h2 { font-size: 28px; }
-  .gallery-controls { justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-  .gallery-count { font-size: 13px; gap: 7px; }
-  .gallery-count svg { width: 38px; height: 38px; padding: 9px; }
-  .name-toggle { min-height: 30px; padding: 0 9px; font-size: 11px; }
+  .gallery-controls { justify-content: flex-end; gap: 10px; flex-wrap: nowrap; }
+  .name-eye-toggle { width: 38px; height: 38px; }
+  .name-eye-toggle svg { width: 20px; height: 20px; }
+  .gallery-count { font-size: 13px; }
   .welcome-back { min-height: 46px; border-radius: 15px; font-size: 14px; }
   .take-camera { min-height: 50px; border-radius: 17px; font-size: 15px; }
   .camera-top { top: max(6px, env(safe-area-inset-top)); grid-template-columns: 58px minmax(0, 1fr) 96px; padding: 8px 18px 0; }
