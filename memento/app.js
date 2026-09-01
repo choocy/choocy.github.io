@@ -57,7 +57,6 @@ let eventRefreshTimer = null;
 let gallerySyncTimer = null;
 let viewportHeight = 0;
 let viewportTop = 0;
-let viewportNudgeTimer = null;
 
 function headers() {
   return {
@@ -517,25 +516,10 @@ function syncViewportHeight() {
   if (['invite', 'loading', 'join'].includes(state.view)) window.scrollTo(0, 0);
 }
 
-function nudgeMobileViewport() {
-  if (!['invite', 'loading', 'join'].includes(state.view)) return;
-  window.clearTimeout(viewportNudgeTimer);
-  viewportNudgeTimer = window.setTimeout(() => {
-    if (!['invite', 'loading', 'join'].includes(state.view)) return;
-    const before = window.scrollY || 0;
-    window.scrollTo(0, 1);
-    requestAnimationFrame(() => {
-      window.scrollTo(0, before);
-      syncViewportHeight();
-    });
-  }, 180);
-}
-
 function stabilizeJoinViewport() {
   syncViewportHeight();
   if (!['invite', 'loading', 'join'].includes(state.view)) return;
   [0, 40, 120, 280, 560, 1000, 1600, 2400].forEach((delay) => window.setTimeout(syncViewportHeight, delay));
-  [220, 700, 1300].forEach((delay) => window.setTimeout(nudgeMobileViewport, delay));
   let frames = 0;
   const watch = () => {
     syncViewportHeight();
@@ -549,7 +533,6 @@ window.addEventListener('resize', syncViewportHeight);
 window.addEventListener('orientationchange', stabilizeJoinViewport);
 window.addEventListener('pageshow', stabilizeJoinViewport);
 window.visualViewport?.addEventListener('resize', syncViewportHeight);
-window.visualViewport?.addEventListener('scroll', syncViewportHeight);
 
 function enterImmersiveMode() {
   const root = document.documentElement;
