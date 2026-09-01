@@ -515,7 +515,6 @@ function syncViewportHeight() {
   viewportTop = top;
   document.documentElement.style.setProperty('--app-height', `${height}px`);
   document.documentElement.style.setProperty('--app-top', `${top}px`);
-  if (['invite', 'loading', 'join'].includes(state.view)) window.scrollTo(0, 0);
 }
 
 function stabilizeJoinViewport() {
