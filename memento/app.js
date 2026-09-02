@@ -892,7 +892,7 @@ function inviteSheet(memory) {
         <button class="sheet-handle" data-close-invite-sheet aria-label="Close invite"></button>
         <button class="sheet-close" data-close-invite-sheet aria-label="Close invite">${icon('close')}</button>
         <h2>Hand out the cameras.</h2>
-        <p>Guests scan to join. No app or account needed.</p>
+        <p>Guests scan with their phone Camera to join. No app or account needed.</p>
         <div class="qr-card">
           <div class="qr-image">${qrSvg}</div>
           <strong>${escapeHtml(code)}</strong>
