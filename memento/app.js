@@ -95,7 +95,7 @@ async function supabaseRpc(functionName, body) {
     },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Supabase RPC ${response.status}`);
+  if (!response.ok) throw new Error(await response.text().catch(() => `Supabase RPC ${response.status}`));
   return response.json();
 }
 
@@ -370,10 +370,13 @@ function stateKey() {
 
 function getDeviceId() {
   const key = 'memento_guest_device_id';
-  const existing = localStorage.getItem(key);
-  if (existing) return existing;
+  const existing = localStorage.getItem(key) || sessionStorage.getItem(key);
+  if (existing) {
+    storageSet(key, existing);
+    return existing;
+  }
   const next = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  localStorage.setItem(key, next);
+  storageSet(key, next);
   return next;
 }
 
@@ -1334,12 +1337,6 @@ async function joinMemento(event) {
 
   state.joinError = '';
   state.nameSheetOpen = true;
-  const normalized = normalizeName(name);
-  if (memory.memberNames.includes(normalized)) {
-    state.joinError = 'This name has already joined. Please use a different name.';
-    render();
-    return;
-  }
 
   if (memory.guestLimit > 0 && memory.joined >= memory.guestLimit) {
     state.joinError = 'This Memento is already full.';
@@ -1363,10 +1360,15 @@ async function joinMemento(event) {
     state.nameSheetOpen = false;
     await loadMemories();
     setView('detail', joined.memento_id);
-  } catch {
-    state.joinError = 'Could not join this Memento. Please try again.';
+  } catch (error) {
+    state.joinError = duplicateJoinError(error) ? 'This name has already joined. Please use a different name.' : 'Could not join this Memento. Please try again.';
     render();
   }
+}
+
+function duplicateJoinError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('already') || message.includes('duplicate') || message.includes('unique');
 }
 
 async function importLocalMedia(event) {
