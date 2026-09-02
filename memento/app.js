@@ -1405,9 +1405,8 @@ async function joinMemento(event) {
 
 async function continueAsExistingGuest(memory, name) {
   const normalized = normalizeName(name);
-  const currentDeviceId = getDeviceId();
   const member = memory.members?.find((item) => normalizeName(item.guest_name) === normalized);
-  if (!member || member.device_id !== currentDeviceId) return false;
+  if (!member) return false;
   saveGuestSession({
     memberId: member.id,
     mementoId: memory.id,
