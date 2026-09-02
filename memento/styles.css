@@ -170,6 +170,10 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .join-bottom-actions .form-error { padding: 11px 13px; border: 1px solid rgb(255 112 112 / 28%); border-radius: 14px; background: rgb(82 18 18 / 68%); color: #ffe1e1; backdrop-filter: blur(16px); }
 .take-camera { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; border: 0; border-radius: 18px; background: rgb(255 255 255 / 76%); color: #30302d; font-size: 16px; font-weight: 720; }
 .take-camera svg { width: 20px; height: 20px; }
+.existing-guest-confirm { display: grid; gap: 4px; padding: 8px 10px 2px; text-align: center; }
+.existing-guest-confirm strong { color: var(--paper); font-size: 17px; line-height: 1.15; }
+.existing-guest-confirm span { color: var(--muted); font-size: 14px; font-weight: 650; }
+.sheet-secondary { min-height: 42px; border: 1px solid var(--line); border-radius: 15px; background: rgb(255 255 255 / 5%); color: var(--muted); font-size: 14px; font-weight: 700; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes bannerSlide {
   0% { transform: translateY(-120%); opacity: 0; }

@@ -47,6 +47,7 @@ const state = {
   error: '',
   joinError: '',
   nameSheetOpen: false,
+  duplicateGuest: null,
   galleryNotice: '',
   guestMenuOpen: false,
   memories: [],
@@ -735,13 +736,24 @@ function join() {
   const available = `${photoRemaining} ${photoRemaining === 1 ? 'shot' : 'shots'}${memory.videos ? `, ${videoRemaining} ${videoRemaining === 1 ? 'video' : 'videos'}` : ''} available`;
   const ended = eventEnded(memory);
   const actionText = `Continue to event ${icon('arrow-right')}`;
+  const duplicateName = state.duplicateGuest?.name || '';
   const nameSheet = state.nameSheetOpen && !returningGuest ? `
     <div class="name-sheet-backdrop" data-close-name-sheet>
       <form class="name-sheet" data-join-form>
         <button class="name-sheet-close" type="button" data-close-name-sheet aria-label="Close name entry">${icon('close')}</button>
-        <label class="name-pill sheet-name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required autofocus></label>
-        ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-        <button class="take-camera" type="submit" ${ended ? 'disabled' : ''}>${ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+        ${state.duplicateGuest ? `
+          <div class="existing-guest-confirm">
+            <strong>${escapeHtml(duplicateName)} exists.</strong>
+            <span>Continue with current user?</span>
+          </div>
+          ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+          <button class="take-camera" type="button" data-confirm-existing-guest>Continue ${icon('arrow-right')}</button>
+          <button class="sheet-secondary" type="button" data-reset-join-name>Use another name</button>
+        ` : `
+          <label class="name-pill sheet-name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required autofocus></label>
+          ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+          <button class="take-camera" type="submit" ${ended ? 'disabled' : ''}>${ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+        `}
       </form>
     </div>` : '';
 
@@ -1211,14 +1223,22 @@ function bind() {
   document.querySelectorAll('[data-join-form]').forEach((form) => form.addEventListener('submit', joinMemento));
   document.querySelectorAll('[data-open-name-sheet]').forEach((button) => button.addEventListener('click', () => {
     state.joinError = '';
+    state.duplicateGuest = null;
     state.nameSheetOpen = true;
     render();
   }));
   document.querySelectorAll('[data-close-name-sheet]').forEach((element) => element.addEventListener('click', (event) => {
     if (event.target !== element && element.classList.contains('name-sheet-backdrop')) return;
     state.nameSheetOpen = false;
+    state.duplicateGuest = null;
     render();
   }));
+  document.querySelector('[data-reset-join-name]')?.addEventListener('click', () => {
+    state.joinError = '';
+    state.duplicateGuest = null;
+    render();
+  });
+  document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -1368,6 +1388,7 @@ async function joinMemento(event) {
   if (!memory || !name) return;
 
   state.joinError = '';
+  state.duplicateGuest = null;
   state.nameSheetOpen = true;
 
   if (memory.guestLimit > 0 && memory.joined >= memory.guestLimit) {
@@ -1395,30 +1416,50 @@ async function joinMemento(event) {
     setView('detail', joined.memento_id);
   } catch (error) {
     if (duplicateJoinError(error) && isLikelyInAppBrowser()) {
-      const recovered = await continueAsExistingGuest(memory, name);
-      if (recovered) return;
+      const existing = existingGuestByName(memory, name);
+      if (existing) {
+        state.duplicateGuest = {
+          memberId: existing.id,
+          mementoId: memory.id,
+          name: existing.guest_name,
+          deviceId: existing.device_id || '',
+          guestToken: existing.guest_return_token || '',
+        };
+        state.joinError = '';
+        render();
+        return;
+      }
     }
     state.joinError = joinErrorMessage(error);
     render();
   }
 }
 
-async function continueAsExistingGuest(memory, name) {
+function existingGuestByName(memory, name) {
   const normalized = normalizeName(name);
-  const member = memory.members?.find((item) => normalizeName(item.guest_name) === normalized);
-  if (!member) return false;
+  return memory.members?.find((item) => normalizeName(item.guest_name) === normalized);
+}
+
+async function confirmExistingGuest() {
+  const guest = state.duplicateGuest;
+  if (!guest) return;
+  if (guest.deviceId && guest.deviceId !== getDeviceId()) {
+    state.joinError = 'This name is already linked to another device.';
+    render();
+    return;
+  }
   saveGuestSession({
-    memberId: member.id,
-    mementoId: memory.id,
-    name: member.guest_name,
-    guestToken: member.guest_return_token || '',
+    memberId: guest.memberId,
+    mementoId: guest.mementoId,
+    name: guest.name,
+    guestToken: guest.guestToken || '',
   });
-  state.selectedId = memory.id;
+  state.selectedId = guest.mementoId;
   state.joinError = '';
+  state.duplicateGuest = null;
   state.nameSheetOpen = false;
   await loadMemories();
-  setView('detail', memory.id);
-  return true;
+  setView('detail', guest.mementoId);
 }
 
 function isLikelyInAppBrowser() {
