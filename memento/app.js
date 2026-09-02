@@ -48,6 +48,7 @@ const state = {
   joinError: '',
   nameSheetOpen: false,
   duplicateGuest: null,
+  scannerGateLocked: shouldLockScannerGateAtStartup(),
   scannerGateCopied: false,
   galleryNotice: '',
   guestMenuOpen: false,
@@ -1493,6 +1494,7 @@ function isLikelyInAppBrowser() {
 function shouldShowBrowserGuidance(returningGuest) {
   if (!state.inviteCode || returningGuest || state.nameSheetOpen) return false;
   if (isRealChromeBrowser()) return false;
+  if (state.scannerGateLocked) return true;
   if (isRealSafariBrowser()) return false;
   return isLikelyInAppBrowser();
 }
@@ -1505,6 +1507,38 @@ function isRealSafariBrowser() {
 function isRealChromeBrowser() {
   const ua = navigator.userAgent || '';
   return /Chrome|CriOS/i.test(ua) && !/Edg|EdgiOS|OPR|OPT|SamsungBrowser|DuckDuckGo/i.test(ua);
+}
+
+function shouldLockScannerGateAtStartup() {
+  if (!inviteCode || isRealChromeBrowser()) return false;
+  if (isLikelyInAppBrowser()) return true;
+  if (!isIosSafariLikeBrowser()) return false;
+  if (browserHandoffSeen()) return false;
+  markBrowserHandoffSeen();
+  return true;
+}
+
+function isIosSafariLikeBrowser() {
+  const ua = navigator.userAgent || '';
+  const isiOS = /iPhone|iPad|iPod/i.test(ua) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return isiOS && isRealSafariBrowser();
+}
+
+function browserHandoffKey() {
+  return `memento_browser_handoff_${inviteCode}`;
+}
+
+function browserHandoffSeen() {
+  try {
+    const seenAt = Number(localStorage.getItem(browserHandoffKey()) || sessionStorage.getItem(browserHandoffKey()) || 0);
+    return seenAt > 0 && Date.now() - seenAt < 10 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
+function markBrowserHandoffSeen() {
+  storageSet(browserHandoffKey(), String(Date.now()));
 }
 
 function duplicateJoinError(error) {
