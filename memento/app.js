@@ -1556,6 +1556,7 @@ function markBrowserHandoffSeen() {
 }
 
 function browserSessionUnlocked() {
+  if (window.name === browserSessionUnlockedKey()) return true;
   try {
     return sessionStorage.getItem(browserSessionUnlockedKey()) === 'true';
   } catch {
@@ -1564,6 +1565,7 @@ function browserSessionUnlocked() {
 }
 
 function markBrowserSessionUnlocked() {
+  window.name = browserSessionUnlockedKey();
   try {
     sessionStorage.setItem(browserSessionUnlockedKey(), 'true');
   } catch {
