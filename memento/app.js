@@ -1393,7 +1393,7 @@ async function joinMemento(event) {
     await loadMemories();
     setView('detail', joined.memento_id);
   } catch (error) {
-    state.joinError = duplicateJoinError(error) ? 'This name has already joined. Please use a different name.' : 'Could not join this Memento. Please try again.';
+    state.joinError = joinErrorMessage(error);
     render();
   }
 }
@@ -1401,6 +1401,23 @@ async function joinMemento(event) {
 function duplicateJoinError(error) {
   const message = String(error?.message || '').toLowerCase();
   return message.includes('already') || message.includes('duplicate') || message.includes('unique');
+}
+
+function joinErrorMessage(error) {
+  if (duplicateJoinError(error)) return 'This name has already joined. Please use a different name.';
+  const detail = readableSupabaseError(error);
+  return detail ? `Could not join this Memento. ${detail}` : 'Could not join this Memento. Please try again.';
+}
+
+function readableSupabaseError(error) {
+  const raw = String(error?.message || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    return String(parsed.message || parsed.details || '').replace(/\.$/, '');
+  } catch {
+    return raw.replace(/^Supabase RPC \d+\s*/i, '').slice(0, 160);
+  }
 }
 
 async function importLocalMedia(event) {
