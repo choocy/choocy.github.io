@@ -175,7 +175,7 @@ async function fetchGuestMementos() {
   const [rows, members, media] = await Promise.all([
     supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
     supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}`),
-    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,uploaded_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=uploaded_at.desc.nullslast`),
+    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,taken_at,uploaded_at,created_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=taken_at.desc.nullslast&order=uploaded_at.desc.nullslast&order=created_at.desc.nullslast`),
   ]);
   return rows.map((row) => mapMemory(row, members, media, inviteRow));
 }
@@ -241,6 +241,7 @@ function mapMediaItem(row, memory = {}) {
     locked: memory.sharedGallery && !memory.revealed && !isCurrentParticipant,
     revealLabel: `Reveals ${memory.revealAtLabel || 'later'}`,
     capturedByName: row.captured_by_name || (isCurrentParticipant ? currentParticipantName() : ''),
+    capturedAt: mediaTimestamp(row),
     sync: row.uploaded_at ? 'Uploaded' : 'Syncing',
   };
 }
@@ -252,6 +253,12 @@ function isOwnMedia(row) {
 
 function mediaCapturedByName(row) {
   return normalizeName(row.captured_by_name || row.capturedByName || '');
+}
+
+function mediaTimestamp(row) {
+  const value = row.capturedAt || row.taken_at || row.uploaded_at || row.created_at || 0;
+  const time = typeof value === 'number' ? value : new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 function parseDate(value) {
@@ -1229,7 +1236,13 @@ function openLastCapture(memoryId) {
 
 function galleryItems(memory) {
   const local = (state.localCaptures.get(memory.id) || []).filter((item) => item.sync !== 'Uploaded');
-  return [...local, ...memory.media];
+  return [...local, ...memory.media].sort(compareMediaNewestFirst);
+}
+
+function compareMediaNewestFirst(a, b) {
+  const byTime = mediaTimestamp(b) - mediaTimestamp(a);
+  if (byTime) return byTime;
+  return String(b.id || '').localeCompare(String(a.id || ''));
 }
 
 function settleViewerAnimation() {
