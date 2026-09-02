@@ -835,8 +835,7 @@ function guestMenu() {
 }
 
 function guestGallery(memory) {
-  const local = state.localCaptures.get(memory.id) || [];
-  const items = [...local, ...memory.media];
+  const items = galleryItems(memory);
   const momentLabel = `${items.length} ${items.length === 1 ? 'moment' : 'moments'}`;
   const toggle = `
     <div class="gallery-heading">
@@ -864,7 +863,7 @@ function mediaTile(item, index, memory) {
 
 function viewer(memory) {
   if (state.viewer == null) return '';
-  const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
+  const items = galleryItems(memory);
   const item = items[state.viewer];
   if (!item) return '';
   const previousIndex = viewerIndex(items.length, -1);
@@ -1204,7 +1203,7 @@ function bindViewerKeys() {
 function moveViewer(step) {
   const memory = currentMemory();
   if (!memory || state.viewer == null) return;
-  const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
+  const items = galleryItems(memory);
   const next = viewerIndex(items.length, step);
   if (next == null) return;
   state.previousViewer = state.viewer;
@@ -1225,6 +1224,11 @@ function openLastCapture(memoryId) {
   state.previousViewer = null;
   state.viewerDirection = 0;
   render();
+}
+
+function galleryItems(memory) {
+  const local = (state.localCaptures.get(memory.id) || []).filter((item) => item.sync !== 'Uploaded');
+  return [...local, ...memory.media];
 }
 
 function settleViewerAnimation() {
@@ -1445,13 +1449,15 @@ function rememberLocalCapture(memoryId, item) {
 
 function markCapture(memoryId, itemId, sync) {
   const list = state.localCaptures.get(memoryId) || [];
-  const memory = state.memories.find((entry) => entry.id === memoryId);
   if (sync === 'Uploaded') {
     updateLastShotStatus(sync);
-    state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
-    loadMemories({ quiet: true, renderOnlyWhenChanged: state.view === 'camera' });
     if (state.view === 'camera') {
+      const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
+      state.localCaptures.set(memoryId, next);
       updateCameraMode();
+    } else {
+      state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
+      loadMemories({ quiet: true });
     }
     return;
   }
