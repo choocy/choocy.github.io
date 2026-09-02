@@ -48,6 +48,7 @@ const state = {
   joinError: '',
   nameSheetOpen: false,
   duplicateGuest: null,
+  scannerGateDismissed: false,
   galleryNotice: '',
   guestMenuOpen: false,
   memories: [],
@@ -737,6 +738,20 @@ function join() {
   const ended = eventEnded(memory);
   const actionText = `Continue to event ${icon('arrow-right')}`;
   const duplicateName = state.duplicateGuest?.name || '';
+  const showScannerGate = isLikelyInAppBrowser() && !returningGuest && !state.scannerGateDismissed && !state.nameSheetOpen;
+  const joinActions = showScannerGate ? `
+    <div class="scanner-privacy-gate">
+      <strong>Open in browser for privacy.</strong>
+      <span>This keeps your guest camera linked to this device.</span>
+      ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+      <button class="take-camera" type="button" data-open-system-browser>Open in browser ${icon('arrow-right')}</button>
+      <button class="sheet-secondary" type="button" data-close-scanner-gate>Close</button>
+    </div>
+  ` : `
+    ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : ''}
+    ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+    <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
+  `;
   const nameSheet = state.nameSheetOpen && !returningGuest ? `
     <div class="name-sheet-backdrop" data-close-name-sheet>
       <form class="name-sheet" data-join-form>
@@ -768,9 +783,7 @@ function join() {
           <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
         </div>
         <div class="join-bottom-actions">
-          ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : ''}
-          ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-          <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
+          ${joinActions}
         </div>
       </div>
     </section>
@@ -1239,6 +1252,8 @@ function bind() {
     render();
   });
   document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
+  document.querySelector('[data-open-system-browser]')?.addEventListener('click', openSystemBrowser);
+  document.querySelector('[data-close-scanner-gate]')?.addEventListener('click', closeScannerGate);
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -1460,6 +1475,24 @@ async function confirmExistingGuest() {
   state.nameSheetOpen = false;
   await loadMemories();
   setView('detail', guest.mementoId);
+}
+
+function openSystemBrowser() {
+  const url = location.href;
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!opened) {
+    navigator.clipboard?.writeText(url).catch(() => {});
+    state.joinError = 'Copy this invite and open it in Safari or Chrome.';
+  }
+  render();
+}
+
+function closeScannerGate() {
+  if (history.length > 1) {
+    history.back();
+    return;
+  }
+  window.close();
 }
 
 function isLikelyInAppBrowser() {
