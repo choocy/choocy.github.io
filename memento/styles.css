@@ -178,7 +178,7 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .scanner-privacy-gate strong { color: var(--paper); font-size: 16px; line-height: 1.15; }
 .scanner-privacy-gate span { color: var(--muted); font-size: 13px; font-weight: 650; line-height: 1.3; }
 .copied-note { margin: 0; color: rgb(255 255 255 / 72%); font-size: 13px; font-weight: 650; }
-.scanner-browser-arrow { position: fixed; right: 42px; bottom: max(92px, calc(env(safe-area-inset-bottom) + 86px)); display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid rgb(255 255 255 / 12%); border-radius: 999px; background: rgb(8 8 8 / 48%); color: rgb(255 255 255 / 70%); font-size: 11px; font-weight: 680; letter-spacing: .01em; pointer-events: none; backdrop-filter: blur(14px); }
+.scanner-browser-arrow { position: fixed; right: 28px; bottom: max(72px, calc(env(safe-area-inset-bottom) + 58px)); display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid rgb(255 255 255 / 12%); border-radius: 999px; background: rgb(8 8 8 / 48%); color: rgb(255 255 255 / 70%); font-size: 11px; font-weight: 680; letter-spacing: .01em; pointer-events: none; backdrop-filter: blur(14px); }
 .scanner-browser-arrow svg { width: 15px; height: 15px; transform: rotate(90deg) translateX(1px); opacity: .9; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes bannerSlide {
