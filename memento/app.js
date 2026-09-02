@@ -747,6 +747,7 @@ function join() {
       ${state.scannerGateCopied ? '<p class="copied-note">Invite link copied.</p>' : ''}
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="take-camera" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
+      <button class="sheet-secondary" type="button" data-refresh-browser>Already in Safari? Refresh</button>
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Browser icon</span>${icon('arrow-right')}</div>
     </div>
   ` : `
@@ -1255,6 +1256,7 @@ function bind() {
   });
   document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
   document.querySelectorAll('[data-open-system-browser]').forEach((button) => button.addEventListener('click', copyInviteForBrowser));
+  document.querySelector('[data-refresh-browser]')?.addEventListener('click', refreshBrowserGate);
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -1483,6 +1485,11 @@ async function copyInviteForBrowser(event) {
     state.joinError = 'Could not copy invite link.';
   }
   render();
+}
+
+function refreshBrowserGate() {
+  preserveInviteInUrl();
+  location.reload();
 }
 
 function isLikelyInAppBrowser() {
