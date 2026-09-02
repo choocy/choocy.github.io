@@ -1494,50 +1494,17 @@ function shouldShowBrowserGuidance(returningGuest) {
   if (!state.inviteCode || returningGuest || state.nameSheetOpen) return false;
   if (isRealChromeBrowser()) return false;
   if (isRealSafariBrowser()) return false;
-  return isLikelyInAppBrowser() || isIosSafariLikeWebView();
+  return isLikelyInAppBrowser();
 }
 
 function isRealSafariBrowser() {
   const ua = navigator.userAgent || '';
-  if (!/Version\/.*Safari/i.test(ua) || /CriOS|FxiOS|Edg|EdgiOS|OPR|OPT|DuckDuckGo/i.test(ua)) return false;
-  if (!isIosBrowser()) return true;
-  return Boolean(window.safari) && !isIosSafariViewController();
+  return /Version\/.*Safari/i.test(ua) && !/CriOS|FxiOS|Edg|EdgiOS|OPR|OPT|DuckDuckGo/i.test(ua);
 }
 
 function isRealChromeBrowser() {
   const ua = navigator.userAgent || '';
   return /Chrome|CriOS/i.test(ua) && !/Edg|EdgiOS|OPR|OPT|SamsungBrowser|DuckDuckGo/i.test(ua);
-}
-
-function isIosSafariViewController() {
-  if (!isIosBrowser() || !isSafariLikeBrowser()) return false;
-  return fontAvailable('.Helvetica LT MM');
-}
-
-function isIosSafariLikeWebView() {
-  if (!isIosBrowser() || !isSafariLikeBrowser()) return false;
-  return !window.safari || isIosSafariViewController();
-}
-
-function isIosBrowser() {
-  const ua = navigator.userAgent || '';
-  return /iPhone|iPad|iPod/i.test(ua) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
-
-function isSafariLikeBrowser() {
-  const ua = navigator.userAgent || '';
-  return /Version\/.*Safari/i.test(ua) && !/CriOS|FxiOS|Edg|EdgiOS|OPR|OPT|DuckDuckGo/i.test(ua);
-}
-
-function fontAvailable(fontName) {
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  if (!context) return false;
-  const sample = 'mmmmmmmmmmlli';
-  context.font = '72px monospace';
-  const fallbackWidth = context.measureText(sample).width;
-  context.font = `72px "${fontName}", monospace`;
-  return context.measureText(sample).width !== fallbackWidth;
 }
 
 function duplicateJoinError(error) {
