@@ -1500,12 +1500,10 @@ function closeScannerGate() {
 
 function isLikelyInAppBrowser() {
   const ua = navigator.userAgent || '';
-  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-  const knownBrowser = /CriOS|FxiOS|EdgiOS|DuckDuckGo|Version\/.*Safari/i.test(ua);
+  const knownBrowser = /CriOS|FxiOS|EdgiOS|DuckDuckGo|Chrome|Firefox|Version\/.*Safari/i.test(ua);
   if (knownBrowser) return false;
   const knownInApp = /(FBAN|FBAV|Instagram|Line\/|MicroMessenger|GSA\/|Twitter|LinkedInApp|Pinterest)/i.test(ua);
-  const codeScannerLike = /iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !standalone && document.referrer === '';
-  return knownInApp || codeScannerLike;
+  return knownInApp;
 }
 
 function duplicateJoinError(error) {
