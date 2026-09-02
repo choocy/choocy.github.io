@@ -741,10 +741,11 @@ function join() {
   const showScannerGate = isLikelyInAppBrowser() && !returningGuest && !state.scannerGateDismissed && !state.nameSheetOpen;
   const joinActions = showScannerGate ? `
     <div class="scanner-privacy-gate">
-      <strong>Open in browser for privacy.</strong>
-      <span>This keeps your guest camera linked to this device.</span>
+      <strong>Open this invite in your browser.</strong>
+      <span>Tap the browser icon in this scanner, then continue in Safari or Chrome.</span>
+      <div class="scanner-browser-cue">${icon('compass')}<small>Browser icon</small></div>
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-      <button class="take-camera" type="button" data-open-system-browser>Open in browser ${icon('arrow-right')}</button>
+      <button class="take-camera" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
       <button class="sheet-secondary" type="button" data-close-scanner-gate>Close</button>
     </div>
   ` : `
@@ -1479,11 +1480,9 @@ async function confirmExistingGuest() {
 
 function openSystemBrowser() {
   const url = location.href;
-  const opened = window.open(url, '_blank', 'noopener,noreferrer');
-  if (!opened) {
-    navigator.clipboard?.writeText(url).catch(() => {});
-    state.joinError = 'Copy this invite and open it in Safari or Chrome.';
-  }
+  navigator.clipboard?.writeText(url).catch(() => {});
+  window.open(url, '_blank', 'noopener,noreferrer');
+  state.joinError = 'Invite link copied. Open it in Safari or Chrome to continue.';
   render();
 }
 
