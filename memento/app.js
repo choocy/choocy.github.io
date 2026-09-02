@@ -17,6 +17,8 @@ const FEATURES = {
   albumImport: false,
 };
 
+const APP_STORE_URL = 'https://apps.apple.com/app/id0000000000';
+
 function storageSet(key, value) {
   try {
     localStorage.setItem(key, value);
@@ -747,6 +749,7 @@ function join() {
       ${state.scannerGateCopied ? '<p class="copied-note">Invite link copied.</p>' : ''}
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="take-camera" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
+      <button class="sheet-secondary" type="button" data-open-memento-app>Continue in app</button>
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Open in browser</span>${icon('arrow-right')}</div>
     </div>
   ` : `
@@ -1255,6 +1258,7 @@ function bind() {
   });
   document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
   document.querySelectorAll('[data-open-system-browser]').forEach((button) => button.addEventListener('click', copyInviteForBrowser));
+  document.querySelector('[data-open-memento-app]')?.addEventListener('click', openMementoApp);
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -1359,6 +1363,14 @@ function settleViewerAnimation() {
 function openInvite() {
   state.view = 'join';
   render();
+}
+
+function openMementoApp() {
+  const openedAt = Date.now();
+  window.location.href = `memento://invite/${encodeURIComponent(state.inviteCode)}`;
+  window.setTimeout(() => {
+    if (Date.now() - openedAt < 1800) window.location.href = APP_STORE_URL;
+  }, 900);
 }
 
 async function shareInviteLink(event) {
