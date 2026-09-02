@@ -743,10 +743,10 @@ function join() {
     <div class="scanner-privacy-gate">
       <strong>Open this invite in your browser.</strong>
       <span>Tap the browser icon in this scanner, then continue in Safari or Chrome.</span>
-      <button class="scanner-browser-cue" type="button" data-open-system-browser>${icon('compass')}<small>Copy link</small></button>
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="take-camera" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
       <button class="sheet-secondary" type="button" data-close-scanner-gate>Close</button>
+      <div class="scanner-browser-arrow" aria-hidden="true"><span>Browser icon</span>${icon('arrow-right')}</div>
     </div>
   ` : `
     ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : ''}
@@ -1253,7 +1253,7 @@ function bind() {
     render();
   });
   document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
-  document.querySelector('[data-open-system-browser]')?.addEventListener('click', openSystemBrowser);
+  document.querySelectorAll('[data-open-system-browser]').forEach((button) => button.addEventListener('click', copyInviteForBrowser));
   document.querySelector('[data-close-scanner-gate]')?.addEventListener('click', closeScannerGate);
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
@@ -1478,10 +1478,15 @@ async function confirmExistingGuest() {
   setView('detail', guest.mementoId);
 }
 
-function openSystemBrowser() {
+async function copyInviteForBrowser(event) {
+  event?.preventDefault();
   const url = location.href;
-  navigator.clipboard?.writeText(url).catch(() => {});
-  state.joinError = 'Invite link copied. Open it in Safari or Chrome to continue.';
+  try {
+    await navigator.clipboard?.writeText(url);
+    state.joinError = 'Invite link copied. Open it in Safari or Chrome to continue.';
+  } catch {
+    state.joinError = 'Copy this invite and open it in Safari or Chrome.';
+  }
   render();
 }
 
