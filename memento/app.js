@@ -1717,6 +1717,7 @@ async function canvasPhotoFromSource(source, width, height, filter = filters.Ori
   if (!context) throw new Error('Canvas unavailable');
   context.filter = filter;
   context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  if (filter === filters.Mono) applyMonoPixels(context, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => {
     if (canvas.toBlob) {
       canvas.toBlob(resolve, 'image/jpeg', 0.9);
@@ -1729,6 +1730,19 @@ async function canvasPhotoFromSource(source, width, height, filter = filters.Ori
     blob: fallbackBlob,
     localUrl: URL.createObjectURL(fallbackBlob),
   };
+}
+
+function applyMonoPixels(context, width, height) {
+  const imageData = context.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const gray = (pixels[index] * 0.299) + (pixels[index + 1] * 0.587) + (pixels[index + 2] * 0.114);
+    const toned = Math.max(0, Math.min(255, ((gray - 128) * 1.06) + 128));
+    pixels[index] = toned;
+    pixels[index + 1] = toned;
+    pixels[index + 2] = toned;
+  }
+  context.putImageData(imageData, 0, 0);
 }
 
 async function ensureCameraReady(video) {
