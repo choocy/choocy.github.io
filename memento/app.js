@@ -39,7 +39,7 @@ const inviteCode = routeInviteCode;
 if (routeInviteCode) storageSet('memento_last_invite_code', routeInviteCode);
 
 const state = {
-  view: inviteCode ? 'invite' : 'home',
+  view: inviteCode ? 'join' : 'home',
   inviteCode,
   guest: loadGuestSession(),
   guestToken: routeGuestToken,
@@ -48,7 +48,7 @@ const state = {
   joinError: '',
   nameSheetOpen: false,
   duplicateGuest: null,
-  scannerGateDismissed: false,
+  scannerGateCopied: false,
   galleryNotice: '',
   guestMenuOpen: false,
   memories: [],
@@ -738,14 +738,14 @@ function join() {
   const ended = eventEnded(memory);
   const actionText = `Continue to event ${icon('arrow-right')}`;
   const duplicateName = state.duplicateGuest?.name || '';
-  const showScannerGate = isLikelyInAppBrowser() && !returningGuest && !state.scannerGateDismissed && !state.nameSheetOpen;
+  const showScannerGate = shouldShowBrowserGuidance(returningGuest);
   const joinActions = showScannerGate ? `
     <div class="scanner-privacy-gate">
       <strong>Open this invite in your browser.</strong>
       <span>Tap the browser icon in this scanner, then continue in Safari or Chrome.</span>
+      ${state.scannerGateCopied ? '<p class="copied-note">Invite link copied.</p>' : ''}
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="take-camera" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
-      <button class="sheet-secondary" type="button" data-close-scanner-gate>Close</button>
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Browser icon</span>${icon('arrow-right')}</div>
     </div>
   ` : `
@@ -1254,7 +1254,6 @@ function bind() {
   });
   document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
   document.querySelectorAll('[data-open-system-browser]').forEach((button) => button.addEventListener('click', copyInviteForBrowser));
-  document.querySelector('[data-close-scanner-gate]')?.addEventListener('click', closeScannerGate);
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -1357,15 +1356,8 @@ function settleViewerAnimation() {
 }
 
 function openInvite() {
-  state.view = 'loading';
+  state.view = 'join';
   render();
-  window.location.href = `memento://invite/${encodeURIComponent(state.inviteCode)}`;
-  window.setTimeout(() => {
-    if (state.view === 'loading') {
-      state.view = 'join';
-      render();
-    }
-  }, 1100);
 }
 
 async function shareInviteLink(event) {
@@ -1480,30 +1472,58 @@ async function confirmExistingGuest() {
 
 async function copyInviteForBrowser(event) {
   event?.preventDefault();
-  const url = location.href;
+  const url = inviteUrl(state.inviteCode);
   try {
     await navigator.clipboard?.writeText(url);
-    state.joinError = 'Invite link copied. Open it in Safari or Chrome to continue.';
+    state.scannerGateCopied = true;
+    state.joinError = '';
   } catch {
-    state.joinError = 'Copy this invite and open it in Safari or Chrome.';
+    state.scannerGateCopied = false;
+    state.joinError = 'Could not copy invite link.';
   }
   render();
 }
 
-function closeScannerGate() {
-  if (history.length > 1) {
-    history.back();
-    return;
-  }
-  window.close();
-}
-
 function isLikelyInAppBrowser() {
   const ua = navigator.userAgent || '';
-  const knownBrowser = /CriOS|FxiOS|EdgiOS|DuckDuckGo|Chrome|Firefox|Version\/.*Safari/i.test(ua);
-  if (knownBrowser) return false;
-  const knownInApp = /(FBAN|FBAV|Instagram|Line\/|MicroMessenger|GSA\/|Twitter|LinkedInApp|Pinterest)/i.test(ua);
+  const knownInApp = /(FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|GSA\/|Twitter|LinkedInApp|Pinterest|Snapchat|TikTok|Bytedance|WhatsApp|Messenger)/i.test(ua);
   return knownInApp;
+}
+
+function shouldShowBrowserGuidance(returningGuest) {
+  if (!state.inviteCode || returningGuest || state.nameSheetOpen) return false;
+  if (isRealChromeBrowser()) return false;
+  if (isIosSafariViewController()) return true;
+  if (isRealSafariBrowser()) return false;
+  return isLikelyInAppBrowser();
+}
+
+function isRealSafariBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Version\/.*Safari/i.test(ua) && !/CriOS|FxiOS|Edg|EdgiOS|OPR|OPT|DuckDuckGo/i.test(ua);
+}
+
+function isRealChromeBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Chrome|CriOS/i.test(ua) && !/Edg|EdgiOS|OPR|OPT|SamsungBrowser|DuckDuckGo/i.test(ua);
+}
+
+function isIosSafariViewController() {
+  const ua = navigator.userAgent || '';
+  const isiOS = /iPhone|iPad|iPod/i.test(ua) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!isiOS || !isRealSafariBrowser()) return false;
+  return fontAvailable('.Helvetica LT MM');
+}
+
+function fontAvailable(fontName) {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) return false;
+  const sample = 'mmmmmmmmmmlli';
+  context.font = '72px monospace';
+  const fallbackWidth = context.measureText(sample).width;
+  context.font = `72px "${fontName}", monospace`;
+  return context.measureText(sample).width !== fallbackWidth;
 }
 
 function duplicateJoinError(error) {
