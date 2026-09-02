@@ -743,7 +743,7 @@ function join() {
     <div class="scanner-privacy-gate">
       <strong>Open this invite in your browser.</strong>
       <span>Tap the browser icon in this scanner, then continue in Safari or Chrome.</span>
-      <div class="scanner-browser-cue">${icon('compass')}<small>Browser icon</small></div>
+      <button class="scanner-browser-cue" type="button" data-open-system-browser>${icon('compass')}<small>Copy link</small></button>
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="take-camera" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
       <button class="sheet-secondary" type="button" data-close-scanner-gate>Close</button>
@@ -1481,7 +1481,6 @@ async function confirmExistingGuest() {
 function openSystemBrowser() {
   const url = location.href;
   navigator.clipboard?.writeText(url).catch(() => {});
-  window.open(url, '_blank', 'noopener,noreferrer');
   state.joinError = 'Invite link copied. Open it in Safari or Chrome to continue.';
   render();
 }
