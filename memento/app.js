@@ -570,10 +570,40 @@ function stabilizeJoinViewport() {
   requestAnimationFrame(watch);
 }
 
+function stabilizeCameraViewport() {
+  syncViewportHeight();
+  if (state.view !== 'camera') return;
+  [0, 40, 120, 280, 560, 1000, 1600].forEach((delayMs) => {
+    window.setTimeout(() => {
+      if (state.view !== 'camera') return;
+      syncViewportHeight();
+      updateCameraMode();
+    }, delayMs);
+  });
+  let frames = 0;
+  const watch = () => {
+    if (state.view !== 'camera') return;
+    syncViewportHeight();
+    frames += 1;
+    if (frames < 60) requestAnimationFrame(watch);
+  };
+  requestAnimationFrame(watch);
+}
+
 window.addEventListener('resize', syncViewportHeight);
-window.addEventListener('orientationchange', stabilizeJoinViewport);
-window.addEventListener('pageshow', stabilizeJoinViewport);
+window.addEventListener('orientationchange', () => {
+  stabilizeJoinViewport();
+  stabilizeCameraViewport();
+});
+window.addEventListener('pageshow', () => {
+  stabilizeJoinViewport();
+  stabilizeCameraViewport();
+});
 window.visualViewport?.addEventListener('resize', syncViewportHeight);
+window.visualViewport?.addEventListener('scroll', () => {
+  syncViewportHeight();
+  if (state.view === 'camera') updateCameraMode();
+});
 
 function enterImmersiveMode() {
   const root = document.documentElement;
@@ -1061,6 +1091,7 @@ function render() {
   document.documentElement.classList.toggle('join-returning', state.view === 'join' && Boolean(memory) && state.guest?.mementoId === memory.id);
   document.documentElement.classList.toggle('viewer-open', state.viewer != null);
   stabilizeJoinViewport();
+  stabilizeCameraViewport();
   scheduleGallerySync();
 }
 
