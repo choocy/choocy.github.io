@@ -1513,7 +1513,10 @@ function shouldLockScannerGateAtStartup() {
   if (!inviteCode || isRealChromeBrowser()) return false;
   if (isLikelyInAppBrowser()) return true;
   if (!isIosSafariLikeBrowser()) return false;
-  if (browserHandoffSeen()) return false;
+  if (browserSessionUnlocked() || browserHandoffSeen()) {
+    markBrowserSessionUnlocked();
+    return false;
+  }
   markBrowserHandoffSeen();
   return true;
 }
@@ -1526,6 +1529,10 @@ function isIosSafariLikeBrowser() {
 
 function browserHandoffKey() {
   return `memento_browser_handoff_${inviteCode}`;
+}
+
+function browserSessionUnlockedKey() {
+  return `memento_browser_unlocked_${inviteCode}`;
 }
 
 function browserHandoffSeen() {
@@ -1546,6 +1553,22 @@ function isReloadNavigation() {
 
 function markBrowserHandoffSeen() {
   storageSet(browserHandoffKey(), String(Date.now()));
+}
+
+function browserSessionUnlocked() {
+  try {
+    return sessionStorage.getItem(browserSessionUnlockedKey()) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function markBrowserSessionUnlocked() {
+  try {
+    sessionStorage.setItem(browserSessionUnlockedKey(), 'true');
+  } catch {
+    // If session storage is unavailable, the invite URL still keeps the flow recoverable.
+  }
 }
 
 function duplicateJoinError(error) {
