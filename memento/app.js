@@ -34,6 +34,7 @@ const inviteFromPath = explicitInvitePathIndex >= 0
   ? routeParts[explicitInvitePathIndex + 1]
   : routeParts[mementoPathIndex + 1];
 const routeInviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
+const routeGuestToken = (routeParams.get('guest_token') || '').trim();
 const inviteCode = routeInviteCode;
 if (routeInviteCode) storageSet('memento_last_invite_code', routeInviteCode);
 
@@ -41,6 +42,7 @@ const state = {
   view: inviteCode ? 'invite' : 'home',
   inviteCode,
   guest: loadGuestSession(),
+  guestToken: routeGuestToken,
   loading: true,
   error: '',
   joinError: '',
@@ -137,6 +139,7 @@ async function loadMemories(options = {}) {
   if (!options.quiet) render();
 
   try {
+    await recoverGuestSessionFromToken();
     state.memories = await fetchGuestMementos();
     if (!state.selectedId && state.memories.length) state.selectedId = state.memories[0].id;
     if (state.inviteCode && state.guest?.mementoId === state.selectedId && ['invite', 'loading', 'home'].includes(state.view)) state.view = 'join';
@@ -351,8 +354,10 @@ function loadGuestSession() {
 }
 
 function saveGuestSession(guest) {
-  localStorage.setItem(`memento_guest_${stateKey()}`, JSON.stringify(guest));
+  storageSet(`memento_guest_${stateKey()}`, JSON.stringify(guest));
   state.guest = guest;
+  if (guest?.guestToken) state.guestToken = guest.guestToken;
+  preserveInviteInUrl();
 }
 
 function loadCapturedByPreference() {
@@ -378,6 +383,24 @@ function getDeviceId() {
   const next = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   storageSet(key, next);
   return next;
+}
+
+async function recoverGuestSessionFromToken() {
+  if (state.guest?.mementoId || !state.guestToken) return;
+  try {
+    const rows = await supabaseJson(`memento_members?select=id,memento_id,guest_name,role,guest_return_token&guest_return_token=eq.${encodeURIComponent(state.guestToken)}&limit=1`);
+    const member = rows[0];
+    if (!member || member.role !== 'guest') return;
+    saveGuestSession({
+      memberId: member.id,
+      mementoId: member.memento_id,
+      name: member.guest_name,
+      guestToken: member.guest_return_token,
+    });
+    if (!state.selectedId) state.selectedId = member.memento_id;
+  } catch {
+    // Older Supabase schema/RLS may not expose guest_return_token yet; normal invite join still works.
+  }
 }
 
 function currentParticipantName() {
@@ -474,8 +497,16 @@ function preserveInviteInUrl() {
   if (!state.inviteCode) return;
   storageSet('memento_last_invite_code', state.inviteCode);
   const params = new URLSearchParams(location.search);
-  if (params.get('invite') === state.inviteCode) return;
-  params.set('invite', state.inviteCode);
+  let changed = false;
+  if (params.get('invite') !== state.inviteCode) {
+    params.set('invite', state.inviteCode);
+    changed = true;
+  }
+  if (state.guestToken && params.get('guest_token') !== state.guestToken) {
+    params.set('guest_token', state.guestToken);
+    changed = true;
+  }
+  if (!changed) return;
   const nextUrl = `${location.pathname}?${params.toString()}${location.hash}`;
   history.replaceState(history.state, '', nextUrl);
 }
@@ -1355,6 +1386,7 @@ async function joinMemento(event) {
       memberId: joined.member_id,
       mementoId: joined.memento_id,
       name: joined.display_name,
+      guestToken: joined.guest_return_token || joined.return_token || '',
     });
     state.selectedId = joined.memento_id;
     state.nameSheetOpen = false;
