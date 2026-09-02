@@ -1493,14 +1493,15 @@ function isLikelyInAppBrowser() {
 function shouldShowBrowserGuidance(returningGuest) {
   if (!state.inviteCode || returningGuest || state.nameSheetOpen) return false;
   if (isRealChromeBrowser()) return false;
-  if (isIosSafariViewController()) return true;
   if (isRealSafariBrowser()) return false;
-  return isLikelyInAppBrowser();
+  return isLikelyInAppBrowser() || isIosSafariLikeWebView();
 }
 
 function isRealSafariBrowser() {
   const ua = navigator.userAgent || '';
-  return /Version\/.*Safari/i.test(ua) && !/CriOS|FxiOS|Edg|EdgiOS|OPR|OPT|DuckDuckGo/i.test(ua);
+  if (!/Version\/.*Safari/i.test(ua) || /CriOS|FxiOS|Edg|EdgiOS|OPR|OPT|DuckDuckGo/i.test(ua)) return false;
+  if (!isIosBrowser()) return true;
+  return Boolean(window.safari) && !isIosSafariViewController();
 }
 
 function isRealChromeBrowser() {
@@ -1509,10 +1510,23 @@ function isRealChromeBrowser() {
 }
 
 function isIosSafariViewController() {
-  const ua = navigator.userAgent || '';
-  const isiOS = /iPhone|iPad|iPod/i.test(ua) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (!isiOS || !isRealSafariBrowser()) return false;
+  if (!isIosBrowser() || !isSafariLikeBrowser()) return false;
   return fontAvailable('.Helvetica LT MM');
+}
+
+function isIosSafariLikeWebView() {
+  if (!isIosBrowser() || !isSafariLikeBrowser()) return false;
+  return !window.safari || isIosSafariViewController();
+}
+
+function isIosBrowser() {
+  const ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/i.test(ua) || ((navigator.platform || '') === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isSafariLikeBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Version\/.*Safari/i.test(ua) && !/CriOS|FxiOS|Edg|EdgiOS|OPR|OPT|DuckDuckGo/i.test(ua);
 }
 
 function fontAvailable(fontName) {
