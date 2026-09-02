@@ -222,6 +222,7 @@ function mapMemory(row, members = [], media = [], inviteRow = null) {
     ownUploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
     ownUploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
     media: visibleMedia.map((item) => mapMediaItem(item, { revealed, sharedGallery, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
+    members: members.filter((member) => member.role === 'guest'),
     memberNames: members.filter((member) => member.role === 'guest').map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
@@ -1393,9 +1394,39 @@ async function joinMemento(event) {
     await loadMemories();
     setView('detail', joined.memento_id);
   } catch (error) {
+    if (duplicateJoinError(error) && isLikelyInAppBrowser()) {
+      const recovered = await continueAsExistingGuest(memory, name);
+      if (recovered) return;
+    }
     state.joinError = joinErrorMessage(error);
     render();
   }
+}
+
+async function continueAsExistingGuest(memory, name) {
+  const normalized = normalizeName(name);
+  const member = memory.members?.find((item) => normalizeName(item.guest_name) === normalized);
+  if (!member) return false;
+  saveGuestSession({
+    memberId: member.id,
+    mementoId: memory.id,
+    name: member.guest_name,
+    guestToken: member.guest_return_token || '',
+  });
+  state.selectedId = memory.id;
+  state.joinError = '';
+  state.nameSheetOpen = false;
+  await loadMemories();
+  setView('detail', memory.id);
+  return true;
+}
+
+function isLikelyInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const knownInApp = /(FBAN|FBAV|Instagram|Line\/|MicroMessenger|CriOS\/.*Mobile\/|GSA\/|Twitter|LinkedInApp|Pinterest|DuckDuckGo|FxiOS)/i.test(ua);
+  const codeScannerLike = /iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !standalone && document.referrer === '';
+  return knownInApp || codeScannerLike;
 }
 
 function duplicateJoinError(error) {
