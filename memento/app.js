@@ -1529,12 +1529,19 @@ function browserHandoffKey() {
 }
 
 function browserHandoffSeen() {
+  if (isReloadNavigation()) return false;
   try {
     const seenAt = Number(localStorage.getItem(browserHandoffKey()) || sessionStorage.getItem(browserHandoffKey()) || 0);
     return seenAt > 0 && Date.now() - seenAt < 10 * 60 * 1000;
   } catch {
     return false;
   }
+}
+
+function isReloadNavigation() {
+  const navigation = performance.getEntriesByType?.('navigation')?.[0];
+  if (navigation?.type) return navigation.type === 'reload';
+  return performance.navigation?.type === 1;
 }
 
 function markBrowserHandoffSeen() {
