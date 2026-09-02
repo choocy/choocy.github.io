@@ -1542,7 +1542,7 @@ function startCamera() {
     photoCaptureInFlight = true;
     event.currentTarget.disabled = true;
     try {
-      const photo = await capturePhoto(video, filterForStyle(memory));
+      const photo = await capturePhoto(video, memory.style);
       photos = Math.max(0, photos - 1);
       const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), capturedAt: Date.now(), sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
@@ -1683,7 +1683,8 @@ function toggleFlash() {
   if (button) button.innerHTML = icon(flashMode ? 'flash' : 'flash-off');
 }
 
-async function capturePhoto(video, filter = filters.Original) {
+async function capturePhoto(video, style = 'Original') {
+  const filter = filters[style] || filters.Original;
   await ensureCameraReady(video);
   if (activeTrack && typeof ImageCapture !== 'undefined' && filter === filters.Original) {
     try {
@@ -1697,7 +1698,7 @@ async function capturePhoto(video, filter = filters.Original) {
       try {
         const imageCapture = new ImageCapture(activeTrack);
         const bitmap = await imageCapture.grabFrame();
-        return canvasPhotoFromSource(bitmap, bitmap.width, bitmap.height, filter);
+        return canvasPhotoFromSource(bitmap, bitmap.width, bitmap.height, style);
       } catch {
         // Canvas capture below works on browsers without ImageCapture support.
       }
@@ -1706,10 +1707,11 @@ async function capturePhoto(video, filter = filters.Original) {
   const settings = activeTrack?.getSettings?.() || {};
   const width = video.videoWidth || settings.width || 1280;
   const height = video.videoHeight || settings.height || 720;
-  return canvasPhotoFromSource(video, width, height, filter);
+  return canvasPhotoFromSource(video, width, height, style);
 }
 
-async function canvasPhotoFromSource(source, width, height, filter = filters.Original) {
+async function canvasPhotoFromSource(source, width, height, style = 'Original') {
+  const filter = filters[style] || filters.Original;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -1717,7 +1719,7 @@ async function canvasPhotoFromSource(source, width, height, filter = filters.Ori
   if (!context) throw new Error('Canvas unavailable');
   context.filter = filter;
   context.drawImage(source, 0, 0, canvas.width, canvas.height);
-  if (filter === filters.Mono) applyMonoPixels(context, canvas.width, canvas.height);
+  if (style === 'Mono') applyMonoPixels(context, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => {
     if (canvas.toBlob) {
       canvas.toBlob(resolve, 'image/jpeg', 0.9);
