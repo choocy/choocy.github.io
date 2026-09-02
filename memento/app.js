@@ -177,7 +177,7 @@ async function fetchGuestMementos() {
 
   const [rows, members, media] = await Promise.all([
     supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
-    supabaseJson(`memento_members?select=id,guest_name,role&memento_id=eq.${encodeURIComponent(mementoId)}`),
+    supabaseJson(`memento_members?select=id,guest_name,role,device_id,guest_return_token&memento_id=eq.${encodeURIComponent(mementoId)}`),
     supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,taken_at,uploaded_at,created_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=taken_at.desc.nullslast&order=uploaded_at.desc.nullslast&order=created_at.desc.nullslast`),
   ]);
   return rows.map((row) => mapMemory(row, members, media, inviteRow));
@@ -1405,8 +1405,9 @@ async function joinMemento(event) {
 
 async function continueAsExistingGuest(memory, name) {
   const normalized = normalizeName(name);
+  const currentDeviceId = getDeviceId();
   const member = memory.members?.find((item) => normalizeName(item.guest_name) === normalized);
-  if (!member) return false;
+  if (!member || member.device_id !== currentDeviceId) return false;
   saveGuestSession({
     memberId: member.id,
     mementoId: memory.id,
