@@ -280,6 +280,7 @@ function styleName(value) {
     polaroid: 'Polaroid-like',
     'polaroid like': 'Polaroid-like',
     mono: 'Mono',
+    monogram: 'Mono',
     monochrome: 'Mono',
     blackwhite: 'Mono',
     'black white': 'Mono',
@@ -931,7 +932,7 @@ function camera() {
   const ended = eventEnded(memory);
   return `
     <section class="camera ${ended ? 'ended' : ''}">
-      <video autoplay playsinline muted ${ended ? 'hidden' : ''}></video>
+      <video autoplay playsinline muted ${ended ? 'hidden' : ''} style="filter:${filterForStyle(memory)}"></video>
       <div class="camera-scrim"></div>
       <div class="camera-label">${ended ? 'Memento has ended' : 'Camera preview'}</div>
       <div class="camera-top">
