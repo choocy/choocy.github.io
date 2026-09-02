@@ -743,7 +743,7 @@ function join() {
   const joinActions = showScannerGate ? `
     <div class="scanner-privacy-gate">
       <strong>Open this invite in your browser.</strong>
-      <span>Open this invite in Safari or Chrome for the full Memento experience.</span>
+      <span>Tap the browser icon in this scanner, then continue in Safari or Chrome.</span>
       ${state.scannerGateCopied ? '<p class="copied-note">Invite link copied.</p>' : ''}
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="take-camera" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
