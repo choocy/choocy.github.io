@@ -653,10 +653,11 @@ function enterImmersiveMode() {
 function topbar() {
   if (['invite', 'loading', 'join', 'camera'].includes(state.view)) return '';
   const showMenu = state.guest?.name && ['home', 'detail'].includes(state.view);
+  const appAction = showMenu && state.inviteCode ? `<a class="topbar-app-button" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode, currentHandoffGuestToken()))}" target="_blank" rel="noopener">App</a>` : '';
   return `
     <header class="topbar">
       <button class="brand" data-view="home" aria-label="Memento home">Memento</button>
-      ${showMenu ? `<button class="guest-menu-button" data-guest-menu aria-label="Guest menu">${icon('menu')}</button>` : ''}
+      ${showMenu ? `<div class="topbar-guest-actions">${appAction}<button class="guest-menu-button" data-guest-menu aria-label="Guest menu">${icon('menu')}</button></div>` : ''}
     </header>`;
 }
 

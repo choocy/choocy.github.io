@@ -40,6 +40,8 @@ img, video { max-width: 100%; display: block; }
 
 .topbar { position: sticky; top: 0; z-index: 10; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 clamp(18px, 5vw, 56px); background: color-mix(in srgb, var(--background), transparent 8%); border-bottom: 1px solid var(--line); backdrop-filter: blur(18px); }
 .brand { border: 0; background: transparent; color: var(--ink); padding: 0; font-family: Georgia, "Times New Roman", serif; font-size: 22px; }
+.topbar-guest-actions { display: flex; align-items: center; gap: 8px; }
+.topbar-app-button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 13px; font-weight: 760; text-decoration: none; }
 .guest-menu-button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--field), transparent 10%); color: var(--ink); }
 .guest-menu-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .guest-menu { position: fixed; right: clamp(18px, 5vw, 56px); top: 74px; z-index: 30; width: min(240px, calc(100vw - 36px)); padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--surface), transparent 3%); box-shadow: 0 18px 48px rgb(0 0 0 / 20%); backdrop-filter: blur(18px); }
