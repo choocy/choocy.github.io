@@ -932,11 +932,16 @@ function guestMenu() {
   if (!state.guestMenuOpen) return '';
   const memory = currentMemory();
   const name = currentParticipantName() || 'Guest';
-  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" data-open-memento-app>Continue in app</a>` : '';
+  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" data-open-memento-app><span>Continue in app</span>${icon('arrow-right')}</a>` : '';
   return `
     <aside class="guest-menu" role="dialog" aria-label="Guest menu">
-      <p>Signed in as</p>
-      <strong>${escapeHtml(name)}</strong>
+      <div class="guest-menu-identity">
+        <span class="guest-menu-avatar">${icon('users')}</span>
+        <span>
+          <small>Signed in as</small>
+          <strong>${escapeHtml(name)}</strong>
+        </span>
+      </div>
       ${appAction}
     </aside>`;
 }
@@ -1391,9 +1396,23 @@ function openMementoApp(event) {
   const appUrl = appInviteUrl();
   if (!appUrl) return;
   const openedAt = Date.now();
+  let settled = false;
+  let fallbackTimer = null;
+  const cancelFallback = () => {
+    settled = true;
+    window.clearTimeout(fallbackTimer);
+  };
+  const cancelOnHidden = () => {
+    if (document.visibilityState === 'hidden') cancelFallback();
+  };
+  window.addEventListener('pagehide', cancelFallback, { once: true });
+  window.addEventListener('blur', cancelFallback, { once: true });
+  document.addEventListener('visibilitychange', cancelOnHidden, { once: true });
   window.location.href = appUrl;
-  window.setTimeout(() => {
-    if (Date.now() - openedAt < 1800) window.location.href = APP_STORE_URL;
+  fallbackTimer = window.setTimeout(() => {
+    if (!settled && document.visibilityState !== 'hidden' && Date.now() - openedAt < 1800) {
+      window.location.href = APP_STORE_URL;
+    }
   }, 900);
 }
 
