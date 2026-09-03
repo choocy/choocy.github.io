@@ -928,9 +928,7 @@ function qrSvgMarkup(value) {
 
 function guestMenu() {
   if (!state.guestMenuOpen) return '';
-  const memory = currentMemory();
   const name = currentParticipantName() || 'Guest';
-  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" target="_blank" rel="noopener"><span>Open app</span>${icon('arrow-right')}</a>` : '';
   return `
     <aside class="guest-menu" role="dialog" aria-label="Guest menu">
       <div class="guest-menu-identity">
@@ -940,7 +938,6 @@ function guestMenu() {
           <strong>${escapeHtml(name)}</strong>
         </span>
       </div>
-      ${appAction}
     </aside>`;
 }
 
@@ -1375,10 +1372,6 @@ function currentHandoffGuestToken(memory = currentMemory()) {
   if (!state.guest?.guestToken) return '';
   if (memory?.id && state.guest.mementoId !== memory.id) return '';
   return state.guest.guestToken;
-}
-
-function appHandoffAvailable(memory = currentMemory()) {
-  return Boolean(state.inviteCode && currentHandoffGuestToken(memory));
 }
 
 function appUniversalInviteUrl(code = state.inviteCode, guestToken = currentHandoffGuestToken()) {
