@@ -48,7 +48,7 @@ img, video { max-width: 100%; display: block; }
 .guest-menu-avatar svg, .guest-menu-action svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .guest-menu small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1; }
 .guest-menu strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 16px; line-height: 1.2; }
-.guest-menu-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; margin-left: 48px; padding: 0 11px 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); color: var(--ink); font-size: 13px; font-weight: 720; text-decoration: none; }
+.guest-menu-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; margin-left: 48px; padding: 0 10px 0 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); color: var(--ink); font-size: 12px; font-weight: 720; text-decoration: none; }
 nav, .actions, .option-row, .style-row, .centered { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .ink, .ghost, .option-row button, .style-row button, .dial button, .close { min-height: 36px; border-radius: 5px; padding: 8px 13px; border: 1px solid var(--line); background: var(--field); color: var(--ink); }
 .ink { background: var(--ink); color: var(--surface); border-color: var(--ink); }

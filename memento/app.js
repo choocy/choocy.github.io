@@ -17,8 +17,6 @@ const FEATURES = {
   albumImport: false,
 };
 
-const APP_STORE_URL = 'https://apps.apple.com/app/id0000000000';
-
 function storageSet(key, value) {
   try {
     localStorage.setItem(key, value);
@@ -750,7 +748,7 @@ function join() {
       ${state.scannerGateCopied ? '<p class="copied-note">Invite link copied.</p>' : ''}
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="sheet-secondary" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
-      <button class="take-camera" type="button" data-open-memento-app>Continue in app</button>
+      <a class="take-camera" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode))}">Continue in app</a>
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Open in browser</span>${icon('arrow-right')}</div>
     </div>
   ` : `
@@ -932,7 +930,7 @@ function guestMenu() {
   if (!state.guestMenuOpen) return '';
   const memory = currentMemory();
   const name = currentParticipantName() || 'Guest';
-  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" data-open-memento-app><span>Open app</span>${icon('arrow-right')}</a>` : '';
+  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}"><span>Open app</span>${icon('arrow-right')}</a>` : '';
   return `
     <aside class="guest-menu" role="dialog" aria-label="Guest menu">
       <div class="guest-menu-identity">
@@ -1267,7 +1265,6 @@ function bind() {
   });
   document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
   document.querySelectorAll('[data-open-system-browser]').forEach((button) => button.addEventListener('click', copyInviteForBrowser));
-  document.querySelectorAll('[data-open-memento-app]').forEach((button) => button.addEventListener('click', openMementoApp));
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -1391,36 +1388,12 @@ function appInviteUrl(code = state.inviteCode, guestToken = currentHandoffGuestT
   return `memento://invite/${encodeURIComponent(code)}${suffix}`;
 }
 
-function openMementoApp(event) {
-  event?.preventDefault();
-  const appUrl = appInviteUrl();
-  if (!appUrl) return;
-  const openedAt = Date.now();
-  let settled = false;
-  let fallbackTimer = null;
-  let launcher = null;
-  const cancelFallback = () => {
-    settled = true;
-    window.clearTimeout(fallbackTimer);
-    launcher?.remove();
-  };
-  const cancelOnHidden = () => {
-    if (document.visibilityState === 'hidden') cancelFallback();
-  };
-  window.addEventListener('pagehide', cancelFallback, { once: true });
-  window.addEventListener('blur', cancelFallback, { once: true });
-  document.addEventListener('visibilitychange', cancelOnHidden, { once: true });
-  launcher = document.createElement('iframe');
-  launcher.hidden = true;
-  launcher.style.display = 'none';
-  launcher.src = appUrl;
-  document.body.appendChild(launcher);
-  fallbackTimer = window.setTimeout(() => {
-    launcher?.remove();
-    if (!settled && document.visibilityState !== 'hidden' && Date.now() - openedAt < 1800) {
-      window.location.href = APP_STORE_URL;
-    }
-  }, 900);
+function appUniversalInviteUrl(code = state.inviteCode, guestToken = currentHandoffGuestToken()) {
+  if (!code) return '';
+  const params = new URLSearchParams({ invite: code });
+  const token = String(guestToken || '').trim();
+  if (token) params.set('guest_token', token);
+  return `${location.origin}/memento/?${params.toString()}`;
 }
 
 async function shareInviteLink(event) {
