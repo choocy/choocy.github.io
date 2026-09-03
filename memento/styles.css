@@ -45,6 +45,7 @@ img, video { max-width: 100%; display: block; }
 .guest-menu { position: fixed; right: clamp(18px, 5vw, 56px); top: 74px; z-index: 30; width: min(260px, calc(100vw - 36px)); padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--surface), transparent 4%); box-shadow: 0 18px 48px rgb(0 0 0 / 22%); backdrop-filter: blur(18px); }
 .guest-menu p { margin: 0 0 5px; color: var(--muted); font-size: 12px; font-weight: 650; }
 .guest-menu strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 16px; }
+.guest-menu-action { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 40px; margin-top: 12px; border: 0; border-radius: 8px; background: var(--ink); color: var(--surface); font-size: 14px; font-weight: 720; }
 nav, .actions, .option-row, .style-row, .centered { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .ink, .ghost, .option-row button, .style-row button, .dial button, .close { min-height: 36px; border-radius: 5px; padding: 8px 13px; border: 1px solid var(--line); background: var(--field); color: var(--ink); }
 .ink { background: var(--ink); color: var(--surface); border-color: var(--ink); }

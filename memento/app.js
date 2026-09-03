@@ -397,6 +397,7 @@ async function recoverGuestSessionFromToken() {
     const rows = await supabaseJson(`memento_members?select=id,memento_id,guest_name,role,guest_return_token&guest_return_token=eq.${encodeURIComponent(state.guestToken)}&limit=1`);
     const member = rows[0];
     if (!member || member.role !== 'guest') return;
+    // guest_token preserves the per-Memento participant identity between web and app.
     saveGuestSession({
       memberId: member.id,
       mementoId: member.memento_id,
@@ -929,11 +930,14 @@ function qrSvgMarkup(value) {
 
 function guestMenu() {
   if (!state.guestMenuOpen) return '';
+  const memory = currentMemory();
   const name = currentParticipantName() || 'Guest';
+  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" data-open-memento-app>Continue in app</a>` : '';
   return `
     <aside class="guest-menu" role="dialog" aria-label="Guest menu">
       <p>Signed in as</p>
       <strong>${escapeHtml(name)}</strong>
+      ${appAction}
     </aside>`;
 }
 
@@ -1258,7 +1262,7 @@ function bind() {
   });
   document.querySelector('[data-confirm-existing-guest]')?.addEventListener('click', confirmExistingGuest);
   document.querySelectorAll('[data-open-system-browser]').forEach((button) => button.addEventListener('click', copyInviteForBrowser));
-  document.querySelector('[data-open-memento-app]')?.addEventListener('click', openMementoApp);
+  document.querySelectorAll('[data-open-memento-app]').forEach((button) => button.addEventListener('click', openMementoApp));
   document.querySelector('.name-sheet')?.addEventListener('click', (event) => event.stopPropagation());
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
     if (state.mode === button.dataset.mode) return;
@@ -1365,9 +1369,29 @@ function openInvite() {
   render();
 }
 
-function openMementoApp() {
+function currentHandoffGuestToken(memory = currentMemory()) {
+  if (!state.guest?.guestToken) return '';
+  if (memory?.id && state.guest.mementoId !== memory.id) return '';
+  return state.guest.guestToken;
+}
+
+function appHandoffAvailable(memory = currentMemory()) {
+  return Boolean(state.inviteCode && currentHandoffGuestToken(memory));
+}
+
+function appInviteUrl(code = state.inviteCode, guestToken = currentHandoffGuestToken()) {
+  if (!code) return '';
+  const token = String(guestToken || '').trim();
+  const suffix = token ? `?guest_token=${encodeURIComponent(token)}` : '';
+  return `memento://invite/${encodeURIComponent(code)}${suffix}`;
+}
+
+function openMementoApp(event) {
+  event?.preventDefault();
+  const appUrl = appInviteUrl();
+  if (!appUrl) return;
   const openedAt = Date.now();
-  window.location.href = `memento://invite/${encodeURIComponent(state.inviteCode)}`;
+  window.location.href = appUrl;
   window.setTimeout(() => {
     if (Date.now() - openedAt < 1800) window.location.href = APP_STORE_URL;
   }, 900);
