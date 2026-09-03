@@ -932,7 +932,7 @@ function guestMenu() {
   if (!state.guestMenuOpen) return '';
   const memory = currentMemory();
   const name = currentParticipantName() || 'Guest';
-  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" data-open-memento-app><span>Continue in app</span>${icon('arrow-right')}</a>` : '';
+  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" data-open-memento-app><span>Open app</span>${icon('arrow-right')}</a>` : '';
   return `
     <aside class="guest-menu" role="dialog" aria-label="Guest menu">
       <div class="guest-menu-identity">
@@ -1398,9 +1398,11 @@ function openMementoApp(event) {
   const openedAt = Date.now();
   let settled = false;
   let fallbackTimer = null;
+  let launcher = null;
   const cancelFallback = () => {
     settled = true;
     window.clearTimeout(fallbackTimer);
+    launcher?.remove();
   };
   const cancelOnHidden = () => {
     if (document.visibilityState === 'hidden') cancelFallback();
@@ -1408,8 +1410,13 @@ function openMementoApp(event) {
   window.addEventListener('pagehide', cancelFallback, { once: true });
   window.addEventListener('blur', cancelFallback, { once: true });
   document.addEventListener('visibilitychange', cancelOnHidden, { once: true });
-  window.location.href = appUrl;
+  launcher = document.createElement('iframe');
+  launcher.hidden = true;
+  launcher.style.display = 'none';
+  launcher.src = appUrl;
+  document.body.appendChild(launcher);
   fallbackTimer = window.setTimeout(() => {
+    launcher?.remove();
     if (!settled && document.visibilityState !== 'hidden' && Date.now() - openedAt < 1800) {
       window.location.href = APP_STORE_URL;
     }
