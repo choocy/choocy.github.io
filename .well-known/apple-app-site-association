@@ -1,0 +1,26 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "2F292QAC3Z.com.ccy.Memento"
+        ],
+        "components": [
+          {
+            "/": "/memento/",
+            "comment": "Memento invite landing page"
+          },
+          {
+            "/": "/memento/*",
+            "comment": "Memento invite paths"
+          }
+        ],
+        "paths": [
+          "/memento/",
+          "/memento/*"
+        ]
+      }
+    ]
+  }
+}
