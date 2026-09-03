@@ -748,7 +748,7 @@ function join() {
       ${state.scannerGateCopied ? '<p class="copied-note">Invite link copied.</p>' : ''}
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="sheet-secondary" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
-      <a class="take-camera" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode))}">Continue in app</a>
+      <a class="take-camera" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode))}" target="_blank" rel="noopener">Continue in app</a>
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Open in browser</span>${icon('arrow-right')}</div>
     </div>
   ` : `
@@ -930,7 +930,7 @@ function guestMenu() {
   if (!state.guestMenuOpen) return '';
   const memory = currentMemory();
   const name = currentParticipantName() || 'Guest';
-  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}"><span>Open app</span>${icon('arrow-right')}</a>` : '';
+  const appAction = appHandoffAvailable(memory) ? `<a class="guest-menu-action" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode, currentHandoffGuestToken(memory)))}" target="_blank" rel="noopener"><span>Open app</span>${icon('arrow-right')}</a>` : '';
   return `
     <aside class="guest-menu" role="dialog" aria-label="Guest menu">
       <div class="guest-menu-identity">
@@ -1379,13 +1379,6 @@ function currentHandoffGuestToken(memory = currentMemory()) {
 
 function appHandoffAvailable(memory = currentMemory()) {
   return Boolean(state.inviteCode && currentHandoffGuestToken(memory));
-}
-
-function appInviteUrl(code = state.inviteCode, guestToken = currentHandoffGuestToken()) {
-  if (!code) return '';
-  const token = String(guestToken || '').trim();
-  const suffix = token ? `?guest_token=${encodeURIComponent(token)}` : '';
-  return `memento://invite/${encodeURIComponent(code)}${suffix}`;
 }
 
 function appUniversalInviteUrl(code = state.inviteCode, guestToken = currentHandoffGuestToken()) {
