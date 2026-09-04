@@ -37,7 +37,6 @@ const inviteFromPath = explicitInvitePathIndex >= 0
   : routeParts[mementoPathIndex + 1];
 const routeInviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
 const routeGuestToken = (routeParams.get('guest_token') || '').trim();
-const debugGate = routeParams.get('debug_gate') === '1';
 const inviteCode = routeInviteCode;
 if (routeInviteCode) storageSet('memento_last_invite_code', routeInviteCode);
 
@@ -752,7 +751,7 @@ function join() {
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="sheet-secondary" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
       <a class="take-camera" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode))}" target="_blank" rel="noopener">Continue in app</a>
-      ${debugGate ? scannerGateDebug() : ''}
+      ${scannerGateDebug()}
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Open in browser</span>${icon('arrow-right')}</div>
     </div>
   ` : `
