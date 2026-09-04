@@ -50,6 +50,7 @@ const state = {
   loading: true,
   error: '',
   joinError: '',
+  joinDebug: '',
   nameSheetOpen: false,
   duplicateGuest: null,
   scannerGateLocked: shouldLockScannerGateAtStartup(),
@@ -762,7 +763,8 @@ function join() {
   ` : `
     ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : ''}
     ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-    <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
+      <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
+    ${state.joinDebug ? `<p class="join-debug">${escapeHtml(state.joinDebug)}</p>` : ''}
   `;
   const nameSheet = state.nameSheetOpen && !returningGuest ? `
     <div class="name-sheet-backdrop" data-close-name-sheet>
@@ -779,6 +781,7 @@ function join() {
         ` : `
           <label class="name-pill sheet-name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required autofocus></label>
           ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+          ${state.joinDebug ? `<p class="join-debug">${escapeHtml(state.joinDebug)}</p>` : ''}
           <button class="take-camera" type="submit" ${ended ? 'disabled' : ''}>${ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
         `}
       </form>
@@ -1447,6 +1450,7 @@ async function joinMemento(event) {
   if (!memory || !name) return;
 
   state.joinError = '';
+  state.joinDebug = '';
   state.duplicateGuest = null;
   state.nameSheetOpen = true;
 
@@ -1476,9 +1480,15 @@ async function joinMemento(event) {
   } catch (error) {
     if (duplicateJoinError(error)) {
       const existing = existingGuestByName(memory, name);
+      const currentDeviceId = getDeviceId();
+      const existingDeviceId = existing?.device_id || '';
+      state.joinDebug = [
+        `member:${existing ? 'found' : 'missing'}`,
+        `current:${currentDeviceId ? 'present' : 'missing'}`,
+        `existing:${existingDeviceId ? 'present' : 'missing'}`,
+        `match:${existingDeviceId && existingDeviceId === currentDeviceId ? 'yes' : 'no'}`,
+      ].join(' ');
       if (existing) {
-        const currentDeviceId = getDeviceId();
-        const existingDeviceId = existing.device_id || '';
         if (existingDeviceId && existingDeviceId === currentDeviceId) {
           saveGuestSession({
             memberId: existing.id,
@@ -1489,6 +1499,7 @@ async function joinMemento(event) {
           state.selectedId = memory.id;
           state.nameSheetOpen = false;
           state.joinError = '';
+          state.joinDebug = '';
           state.duplicateGuest = null;
           await loadMemories();
           setView('detail', memory.id);
@@ -1537,6 +1548,7 @@ async function confirmExistingGuest() {
   });
   state.selectedId = guest.mementoId;
   state.joinError = '';
+  state.joinDebug = '';
   state.duplicateGuest = null;
   state.nameSheetOpen = false;
   await loadMemories();
