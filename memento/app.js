@@ -1556,7 +1556,13 @@ function isRealChromeBrowser() {
 function shouldLockScannerGateAtStartup() {
   if (!inviteCode || isRealChromeBrowser()) return false;
   if (isLikelyInAppBrowser()) return true;
-  return false;
+  if (!isIosSafariLikeBrowser()) return false;
+  if (browserSessionUnlocked() || browserHandoffSeen()) {
+    markBrowserSessionUnlocked();
+    return false;
+  }
+  markBrowserHandoffSeen();
+  return true;
 }
 
 function isIosSafariLikeBrowser() {
