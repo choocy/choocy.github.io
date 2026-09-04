@@ -1474,14 +1474,36 @@ async function joinMemento(event) {
     await loadMemories();
     setView('detail', joined.memento_id);
   } catch (error) {
-    if (duplicateJoinError(error) && isLikelyInAppBrowser()) {
+    if (duplicateJoinError(error)) {
       const existing = existingGuestByName(memory, name);
       if (existing) {
+        const currentDeviceId = getDeviceId();
+        const existingDeviceId = existing.device_id || '';
+        if (existingDeviceId && existingDeviceId === currentDeviceId) {
+          saveGuestSession({
+            memberId: existing.id,
+            mementoId: memory.id,
+            name: existing.guest_name,
+            guestToken: existing.guest_return_token || '',
+          });
+          state.selectedId = memory.id;
+          state.nameSheetOpen = false;
+          state.joinError = '';
+          state.duplicateGuest = null;
+          await loadMemories();
+          setView('detail', memory.id);
+          return;
+        }
+        if (!isLikelyInAppBrowser()) {
+          state.joinError = joinErrorMessage(error);
+          render();
+          return;
+        }
         state.duplicateGuest = {
           memberId: existing.id,
           mementoId: memory.id,
           name: existing.guest_name,
-          deviceId: existing.device_id || '',
+          deviceId: existingDeviceId,
           guestToken: existing.guest_return_token || '',
         };
         state.joinError = '';
