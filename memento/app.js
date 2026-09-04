@@ -37,12 +37,14 @@ const inviteFromPath = explicitInvitePathIndex >= 0
   : routeParts[mementoPathIndex + 1];
 const routeInviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
 const routeGuestToken = (routeParams.get('guest_token') || '').trim();
+const routeBrowserIntent = routeParams.get('browser') === '1';
 const inviteCode = routeInviteCode;
 if (routeInviteCode) storageSet('memento_last_invite_code', routeInviteCode);
 
 const state = {
   view: inviteCode ? 'join' : 'home',
   inviteCode,
+  browserIntent: routeBrowserIntent,
   guest: loadGuestSession(),
   guestToken: routeGuestToken,
   loading: true,
@@ -513,6 +515,10 @@ function preserveInviteInUrl() {
     params.set('guest_token', state.guestToken);
     changed = true;
   }
+  if (state.browserIntent && params.get('browser') !== '1') {
+    params.set('browser', '1');
+    changed = true;
+  }
   if (!changed) return;
   const nextUrl = `${location.pathname}?${params.toString()}${location.hash}`;
   history.replaceState(history.state, '', nextUrl);
@@ -751,7 +757,6 @@ function join() {
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="sheet-secondary" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
       <a class="take-camera" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode))}" target="_blank" rel="noopener">Continue in app</a>
-      ${scannerGateDebug()}
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Open in browser</span>${icon('arrow-right')}</div>
     </div>
   ` : `
@@ -1537,44 +1542,12 @@ function isLikelyInAppBrowser() {
 }
 
 function shouldShowBrowserGuidance(returningGuest) {
+  if (state.browserIntent) return false;
   if (!state.inviteCode || returningGuest || state.nameSheetOpen) return false;
   if (isRealChromeBrowser()) return false;
   if (state.scannerGateLocked) return true;
   if (isRealSafariBrowser()) return false;
   return isLikelyInAppBrowser();
-}
-
-function scannerGateDebug() {
-  const navigation = performance.getEntriesByType?.('navigation')?.[0];
-  const values = [
-    ['locked', state.scannerGateLocked],
-    ['referrer', document.referrer || ''],
-    ['nav type', navigation?.type || 'legacy'],
-    ['history', history.length],
-    ['inner', `${window.innerWidth}x${window.innerHeight}`],
-    ['outer', `${window.outerWidth || 0}x${window.outerHeight || 0}`],
-    ['visual', window.visualViewport ? `${Math.round(window.visualViewport.width)}x${Math.round(window.visualViewport.height)}` : 'none'],
-    ['screen', `${window.screen?.width || 0}x${window.screen?.height || 0}`],
-    ['avail', `${window.screen?.availWidth || 0}x${window.screen?.availHeight || 0}`],
-    ['dpr', window.devicePixelRatio || 1],
-    ['session', browserSessionUnlocked()],
-    ['handoff', browserHandoffSeen()],
-    ['real safari', isRealSafariBrowser()],
-    ['real chrome', isRealChromeBrowser()],
-    ['ios safari', isIosSafariLikeBrowser()],
-    ['in-app', isLikelyInAppBrowser()],
-    ['reload', isReloadNavigation()],
-    ['standalone?', 'standalone' in navigator],
-    ['standalone', navigator.standalone],
-    ['platform', navigator.platform || ''],
-    ['touches', navigator.maxTouchPoints || 0],
-    ['ua', navigator.userAgent || ''],
-  ];
-  return `
-    <details class="scanner-debug" open>
-      <summary>Gate debug</summary>
-      ${values.map(([label, value]) => `<p><b>${escapeHtml(label)}</b><span>${escapeHtml(String(value))}</span></p>`).join('')}
-    </details>`;
 }
 
 function isRealSafariBrowser() {
@@ -1588,6 +1561,7 @@ function isRealChromeBrowser() {
 }
 
 function shouldLockScannerGateAtStartup() {
+  if (routeBrowserIntent) return false;
   if (!inviteCode || isRealChromeBrowser()) return false;
   if (isLikelyInAppBrowser()) return true;
   if (!isIosSafariLikeBrowser()) return false;
