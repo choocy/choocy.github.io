@@ -37,6 +37,7 @@ const inviteFromPath = explicitInvitePathIndex >= 0
   : routeParts[mementoPathIndex + 1];
 const routeInviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
 const routeGuestToken = (routeParams.get('guest_token') || '').trim();
+const debugGate = routeParams.get('debug_gate') === '1';
 const inviteCode = routeInviteCode;
 if (routeInviteCode) storageSet('memento_last_invite_code', routeInviteCode);
 
@@ -751,6 +752,7 @@ function join() {
       ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="sheet-secondary" type="button" data-open-system-browser>Copy invite link ${icon('link')}</button>
       <a class="take-camera" href="${escapeHtml(appUniversalInviteUrl(state.inviteCode))}" target="_blank" rel="noopener">Continue in app</a>
+      ${debugGate ? scannerGateDebug() : ''}
       <div class="scanner-browser-arrow" aria-hidden="true"><span>Open in browser</span>${icon('arrow-right')}</div>
     </div>
   ` : `
@@ -1541,6 +1543,36 @@ function shouldShowBrowserGuidance(returningGuest) {
   if (state.scannerGateLocked) return true;
   if (isRealSafariBrowser()) return false;
   return isLikelyInAppBrowser();
+}
+
+function scannerGateDebug() {
+  const navigation = performance.getEntriesByType?.('navigation')?.[0];
+  const values = [
+    ['locked', state.scannerGateLocked],
+    ['real safari', isRealSafariBrowser()],
+    ['real chrome', isRealChromeBrowser()],
+    ['ios safari-like', isIosSafariLikeBrowser()],
+    ['known in-app', isLikelyInAppBrowser()],
+    ['reload', isReloadNavigation()],
+    ['handoff seen', browserHandoffSeen()],
+    ['session unlocked', browserSessionUnlocked()],
+    ['standalone key', 'standalone' in navigator],
+    ['standalone', navigator.standalone],
+    ['platform', navigator.platform || ''],
+    ['touches', navigator.maxTouchPoints || 0],
+    ['inner', `${window.innerWidth}x${window.innerHeight}`],
+    ['screen', `${window.screen?.width || 0}x${window.screen?.height || 0}`],
+    ['avail', `${window.screen?.availWidth || 0}x${window.screen?.availHeight || 0}`],
+    ['visual viewport', window.visualViewport ? `${Math.round(window.visualViewport.width)}x${Math.round(window.visualViewport.height)}` : 'none'],
+    ['nav type', navigation?.type || 'legacy'],
+    ['referrer', document.referrer || ''],
+    ['ua', navigator.userAgent || ''],
+  ];
+  return `
+    <details class="scanner-debug" open>
+      <summary>Gate debug</summary>
+      ${values.map(([label, value]) => `<p><b>${escapeHtml(label)}</b><span>${escapeHtml(String(value))}</span></p>`).join('')}
+    </details>`;
 }
 
 function isRealSafariBrowser() {
