@@ -39,6 +39,7 @@ const inviteFromPath = explicitInvitePathIndex >= 0
 const routeInviteCode = (routeParams.get('invite') || routeParams.get('code') || inviteFromPath || '').trim();
 const routeGuestToken = (routeParams.get('guest_token') || '').trim();
 const routeBrowserIntent = routeParams.get('browser') === '1';
+const routeEnvironment = routeParams.get('env') === 'dev' || routeParams.get('env') === 'development' ? 'dev' : '';
 const inviteCode = routeInviteCode;
 if (routeInviteCode) storageSet('memento_last_invite_code', routeInviteCode);
 
@@ -104,10 +105,11 @@ function resolveMementoConfig() {
   };
   const hasPlaceholder = [resolved.supabaseUrl, resolved.supabaseAnonKey].some((value) => value.includes('REPLACE_WITH_'));
 
-  if (isProductionHost && (env !== 'production' || resolved.project !== 'memento-prd')) {
+  const explicitDev = new URLSearchParams(location.search).get('env') === 'dev' || new URLSearchParams(location.search).get('env') === 'development';
+  if (isProductionHost && !explicitDev && (env !== 'production' || resolved.project !== 'memento-prd')) {
     throw new Error('Production Memento config must use memento-prd.');
   }
-  if (isProductionHost && rawConfig.development?.supabaseUrl && resolved.supabaseUrl === rawConfig.development.supabaseUrl) {
+  if (isProductionHost && !explicitDev && rawConfig.development?.supabaseUrl && resolved.supabaseUrl === rawConfig.development.supabaseUrl) {
     throw new Error('Production Memento config cannot point to memento-dev.');
   }
   if (!resolved.supabaseUrl || !resolved.supabaseAnonKey || hasPlaceholder) {
@@ -552,6 +554,10 @@ function preserveInviteInUrl() {
     params.set('browser', '1');
     changed = true;
   }
+  if (routeEnvironment && params.get('env') !== routeEnvironment) {
+    params.set('env', routeEnvironment);
+    changed = true;
+  }
   if (!changed) return;
   const nextUrl = `${location.pathname}?${params.toString()}${location.hash}`;
   history.replaceState(history.state, '', nextUrl);
@@ -705,8 +711,6 @@ function topbar() {
 }
 
 function devBadge() {
-  const host = location.hostname.toLowerCase();
-  if (host === 'choocy.app' || host === 'www.choocy.app') return '';
   return config.env === 'development' && config.project === 'memento-dev'
     ? '<span class="dev-badge" aria-label="Development Supabase environment">DEV</span>'
     : '';

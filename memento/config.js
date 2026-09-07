@@ -1,5 +1,7 @@
 window.MEMENTO_CONFIG = {
-  env: location.hostname === 'choocy.app' || location.hostname === 'www.choocy.app'
+  env: new URLSearchParams(location.search).get('env') === 'dev' || new URLSearchParams(location.search).get('env') === 'development'
+    ? 'development'
+    : location.hostname === 'choocy.app' || location.hostname === 'www.choocy.app'
     ? 'production'
     : 'development',
   development: {
