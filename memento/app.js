@@ -710,9 +710,9 @@ function topbar() {
     </header>`;
 }
 
-function devBadge() {
+function devBadge(context = '') {
   return config.env === 'development' && config.project === 'memento-dev'
-    ? '<span class="dev-badge" aria-label="Development Supabase environment">DEV</span>'
+    ? `<span class="dev-badge ${context ? `dev-badge-${context}` : ''}" aria-label="Development Supabase environment">DEV</span>`
     : '';
 }
 
@@ -838,6 +838,7 @@ function join() {
       <div class="join-bg">${imageMarkup(memory, 'join-bg-image')}</div>
       <div class="join-overlay-card ${returningGuest ? 'returning' : ''}">
         <div class="join-event-copy">
+          ${devBadge('join')}
           <p class="invited-by">${icon('users')} Invited by Memento</p>
           <h1>${escapeHtml(memory.title)}</h1>
           <p class="event-meta">${icon('clock')} ${escapeHtml(eventTimeLeft(memory))} <span></span> ${icon('camera')} ${escapeHtml(available)}</p>
