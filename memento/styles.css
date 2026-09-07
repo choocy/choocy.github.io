@@ -41,8 +41,8 @@ img, video { max-width: 100%; display: block; }
 .topbar { position: sticky; top: 0; z-index: 10; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 clamp(18px, 5vw, 56px); background: color-mix(in srgb, var(--background), transparent 8%); border-bottom: 1px solid var(--line); backdrop-filter: blur(18px); }
 .brand-row { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .brand { border: 0; background: transparent; color: var(--ink); padding: 0; font-family: Georgia, "Times New Roman", serif; font-size: 22px; }
-.dev-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border: 1px solid rgb(255 255 255 / 18%); border-radius: 999px; background: rgb(255 255 255 / 8%); color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
-.dev-badge-join { justify-self: center; margin-bottom: -4px; background: rgb(0 0 0 / 44%); color: rgb(255 255 255 / 78%); backdrop-filter: blur(14px); }
+.dev-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border: 1px solid rgb(255 214 0 / 88%); border-radius: 999px; background: #ffd600; color: #111; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.dev-badge-join { justify-self: center; margin-bottom: -4px; box-shadow: 0 6px 18px rgb(0 0 0 / 28%); }
 .guest-menu-button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--field), transparent 10%); color: var(--ink); }
 .guest-menu-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .guest-menu { position: fixed; right: clamp(18px, 5vw, 56px); top: 74px; z-index: 30; width: min(240px, calc(100vw - 36px)); padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--surface), transparent 3%); box-shadow: 0 18px 48px rgb(0 0 0 / 20%); backdrop-filter: blur(18px); }
