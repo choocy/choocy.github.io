@@ -7,10 +7,11 @@ const filters = {
   Mono: 'grayscale(1) contrast(1.06)',
 };
 
+const config = resolveMementoConfig();
 const supabase = {
-  url: 'https://omtdedqgtheuutxqzoij.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tdGRlZHFndGhldXV0eHF6b2lqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NDcyNzEsImV4cCI6MjEwMzQyMzI3MX0.0iIUhdbngD8iRMQjAjZNgqtsJ7_0xam6sFVx9JP5Ep0',
-  originalsBucket: 'memento-originals',
+  url: config.supabaseUrl,
+  anonKey: config.supabaseAnonKey,
+  originalsBucket: config.originalsBucket,
 };
 
 const FEATURES = {
@@ -50,7 +51,6 @@ const state = {
   loading: true,
   error: '',
   joinError: '',
-  joinDebug: '',
   nameSheetOpen: false,
   duplicateGuest: null,
   scannerGateLocked: shouldLockScannerGateAtStartup(),
@@ -87,6 +87,33 @@ function headers() {
     apikey: supabase.anonKey,
     Authorization: `Bearer ${supabase.anonKey}`,
   };
+}
+
+function resolveMementoConfig() {
+  const host = location.hostname.toLowerCase();
+  const isProductionHost = host === 'choocy.app' || host === 'www.choocy.app';
+  const rawConfig = window.MEMENTO_CONFIG || {};
+  const env = (rawConfig.env || (isProductionHost ? 'production' : 'development')).toLowerCase();
+  const active = rawConfig[env] || rawConfig;
+  const resolved = {
+    env,
+    project: active.project || '',
+    supabaseUrl: active.supabaseUrl || '',
+    supabaseAnonKey: active.supabaseAnonKey || '',
+    originalsBucket: active.originalsBucket || 'memento-originals',
+  };
+  const hasPlaceholder = [resolved.supabaseUrl, resolved.supabaseAnonKey].some((value) => value.includes('REPLACE_WITH_'));
+
+  if (isProductionHost && (env !== 'production' || resolved.project !== 'memento-prd')) {
+    throw new Error('Production Memento config must use memento-prd.');
+  }
+  if (isProductionHost && rawConfig.development?.supabaseUrl && resolved.supabaseUrl === rawConfig.development.supabaseUrl) {
+    throw new Error('Production Memento config cannot point to memento-dev.');
+  }
+  if (!resolved.supabaseUrl || !resolved.supabaseAnonKey || hasPlaceholder) {
+    throw new Error(`Missing Memento Supabase config for ${env}.`);
+  }
+  return resolved;
 }
 
 async function supabaseJson(path) {
@@ -430,8 +457,8 @@ async function hydrateCoverImages(renderWhenDone = true) {
       }
     }
     memory.media.forEach((item) => {
+      // Gallery grids stay on thumbnails; originals are fetched only by the full viewer/playback.
       if (!item.locked && item.path) paths.push(item.path);
-      if (!item.locked && item.originalPath) paths.push(item.originalPath);
     });
   }));
   await Promise.all(paths.map((path) => storageObjectUrl(path)));
@@ -485,9 +512,14 @@ function filterForStyle(memory) {
   return filters[memory?.style] || filters.Original;
 }
 
-function mediaUrl(item) {
+function galleryMediaUrl(item) {
   if (item.locked) return item.localUrl || state.mediaUrls.get(item.path) || '';
-  return item.localUrl || state.mediaUrls.get(item.originalPath) || state.mediaUrls.get(item.path) || '';
+  return item.localUrl || state.mediaUrls.get(item.path) || '';
+}
+
+function viewerMediaUrl(item) {
+  if (item.locked) return item.localUrl || state.mediaUrls.get(item.path) || '';
+  return item.localUrl || state.mediaUrls.get(item.originalPath) || '';
 }
 
 function setView(next, id) {
@@ -664,9 +696,20 @@ function topbar() {
   const showMenu = state.guest?.name && ['home', 'detail'].includes(state.view);
   return `
     <header class="topbar">
-      <button class="brand" data-view="home" aria-label="Memento home">Memento</button>
+      <div class="brand-row">
+        <button class="brand" data-view="home" aria-label="Memento home">Memento</button>
+        ${devBadge()}
+      </div>
       ${showMenu ? `<button class="guest-menu-button" data-guest-menu aria-label="Guest menu">${icon('menu')}</button>` : ''}
     </header>`;
+}
+
+function devBadge() {
+  const host = location.hostname.toLowerCase();
+  if (host === 'choocy.app' || host === 'www.choocy.app') return '';
+  return config.env === 'development' && config.project === 'memento-dev'
+    ? '<span class="dev-badge" aria-label="Development Supabase environment">DEV</span>'
+    : '';
 }
 
 function home() {
@@ -764,7 +807,6 @@ function join() {
     ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : ''}
     ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
       <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
-    ${state.joinDebug ? `<p class="join-debug">${escapeHtml(state.joinDebug)}</p>` : ''}
   `;
   const nameSheet = state.nameSheetOpen && !returningGuest ? `
     <div class="name-sheet-backdrop" data-close-name-sheet>
@@ -781,7 +823,6 @@ function join() {
         ` : `
           <label class="name-pill sheet-name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required autofocus></label>
           ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-          ${state.joinDebug ? `<p class="join-debug">${escapeHtml(state.joinDebug)}</p>` : ''}
           <button class="take-camera" type="submit" ${ended ? 'disabled' : ''}>${ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
         `}
       </form>
@@ -967,7 +1008,7 @@ function guestGallery(memory) {
 }
 
 function mediaTile(item, index, memory) {
-  const url = mediaUrl(item);
+  const url = galleryMediaUrl(item);
   const style = unlockedMediaFilter(item, memory);
   const capturedBy = !item.locked && state.showCapturedBy && item.capturedByName
     ? `<span class="captured-pill">${escapeHtml(item.capturedByName)}</span>`
@@ -976,7 +1017,7 @@ function mediaTile(item, index, memory) {
   const media = item.locked
     ? `<span class="locked-placeholder">${icon('lock')}</span>`
     : item.type === 'video'
-    ? `${item.posterUrl ? `<img src="${item.posterUrl}" loading="lazy" alt="" style="${style}">` : `<video src="${url}" muted playsinline preload="metadata" style="${style}"></video>`}<span class="play">${icon('play')}</span>`
+    ? `${item.posterUrl || url ? `<img src="${item.posterUrl || url}" loading="lazy" alt="" style="${style}">` : `<span class="locked-placeholder">${icon('play')}</span>`}<span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="" style="${style}">`;
   return `<button class="media-tile ${item.locked ? 'locked' : ''}" data-open-media="${index}" type="button">${media}${locked}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
 }
@@ -988,14 +1029,14 @@ function viewer(memory) {
   if (!item) return '';
   const previousIndex = viewerIndex(items.length, -1);
   const nextIndex = viewerIndex(items.length, 1);
-  const url = mediaUrl(item);
+  const url = viewerMediaUrl(item);
   const reaction = state.reactions.get(item.id) || {};
   const incomingClass = state.viewerDirection < 0 ? 'viewer-frame enter-left' : state.viewerDirection > 0 ? 'viewer-frame enter-right' : 'viewer-frame';
   const outgoingItem = state.previousViewer == null ? null : items[state.previousViewer];
   const outgoingReaction = outgoingItem ? state.reactions.get(outgoingItem.id) || {} : {};
   const outgoingClass = state.viewerDirection < 0 ? 'viewer-frame exit-right' : state.viewerDirection > 0 ? 'viewer-frame exit-left' : '';
   const outgoingMedia = outgoingItem && state.viewerDirection
-    ? viewerMediaElement(outgoingItem, mediaUrl(outgoingItem), outgoingReaction, outgoingClass, false, memory)
+    ? viewerMediaElement(outgoingItem, viewerMediaUrl(outgoingItem), outgoingReaction, outgoingClass, false, memory)
     : '';
   const media = `${outgoingMedia}${viewerMediaElement(item, url, reaction, incomingClass, true, memory)}`;
   return `
@@ -1023,6 +1064,7 @@ function viewerMediaElement(item, url, reaction, className, active, memory) {
   if (item.locked) {
     return `<div class="${classes} locked-viewer-placeholder">${icon('lock')}</div><span class="viewer-lock-label">${escapeHtml(item.revealLabel)}</span>`;
   }
+  if (!url) return `<div class="${classes} locked-viewer-placeholder">${icon('image')}</div>`;
   return item.type === 'video'
     ? `<video class="${classes}" src="${url}" ${active ? 'controls autoplay' : 'muted'} playsinline style="${style}"></video>`
     : `<img class="${classes}" src="${url}" alt="" style="${style}">`;
@@ -1220,6 +1262,7 @@ function bind() {
     state.previousViewer = null;
     state.viewerDirection = 0;
     render();
+    hydrateViewerOriginal();
   }));
   document.querySelector('[data-open-last-capture]')?.addEventListener('click', (event) => {
     openLastCapture(event.currentTarget.dataset.id);
@@ -1341,6 +1384,16 @@ function moveViewer(step) {
   state.viewerDirection = step;
   state.viewer = next;
   render();
+  hydrateViewerOriginal();
+}
+
+function hydrateViewerOriginal() {
+  const memory = currentMemory();
+  const item = memory && state.viewer != null ? galleryItems(memory)[state.viewer] : null;
+  if (!item || item.locked || item.localUrl || !item.originalPath || state.mediaUrls.has(item.originalPath)) return;
+  storageObjectUrl(item.originalPath).then(() => {
+    if (state.viewer != null) render();
+  }).catch(() => {});
 }
 
 function openLastCapture(memoryId) {
@@ -1355,6 +1408,7 @@ function openLastCapture(memoryId) {
   state.previousViewer = null;
   state.viewerDirection = 0;
   render();
+  hydrateViewerOriginal();
 }
 
 function galleryItems(memory) {
@@ -1450,7 +1504,6 @@ async function joinMemento(event) {
   if (!memory || !name) return;
 
   state.joinError = '';
-  state.joinDebug = '';
   state.duplicateGuest = null;
   state.nameSheetOpen = true;
 
@@ -1482,12 +1535,6 @@ async function joinMemento(event) {
       const existing = existingGuestByName(memory, name);
       const currentDeviceId = getDeviceId();
       const existingDeviceId = existing?.device_id || '';
-      state.joinDebug = [
-        `member:${existing ? 'found' : 'missing'}`,
-        `current:${currentDeviceId ? 'present' : 'missing'}`,
-        `existing:${existingDeviceId ? 'present' : 'missing'}`,
-        `match:${existingDeviceId && existingDeviceId === currentDeviceId ? 'yes' : 'no'}`,
-      ].join(' ');
       if (existing) {
         if (existingDeviceId && existingDeviceId === currentDeviceId) {
           saveGuestSession({
@@ -1499,7 +1546,6 @@ async function joinMemento(event) {
           state.selectedId = memory.id;
           state.nameSheetOpen = false;
           state.joinError = '';
-          state.joinDebug = '';
           state.duplicateGuest = null;
           await loadMemories();
           setView('detail', memory.id);
@@ -1548,7 +1594,6 @@ async function confirmExistingGuest() {
   });
   state.selectedId = guest.mementoId;
   state.joinError = '';
-  state.joinDebug = '';
   state.duplicateGuest = null;
   state.nameSheetOpen = false;
   await loadMemories();
