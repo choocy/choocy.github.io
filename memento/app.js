@@ -231,6 +231,7 @@ function mapMemory(row, members = [], media = [], inviteRow = null) {
   const ended = end ? Date.now() >= end.getTime() : false;
   const sharedGallery = Boolean(row.host_preview_before_reveal);
   const visibleMedia = media.filter((item) => isMediaVisibleForMemory(item, { revealed, sharedGallery }));
+  const guestMembers = members.filter((member) => member.role === 'guest');
 
   return {
     id: row.id,
@@ -253,14 +254,14 @@ function mapMemory(row, members = [], media = [], inviteRow = null) {
     inviteUrl: inviteRow?.invite_url || inviteUrl(inviteRow?.code || state.inviteCode),
     sharedGallery,
     guestLimit: numberValue(row.guest_limit, 0),
-    joined: members.length,
+    joined: guestMembers.length,
     uploadedPhotos: visibleMedia.filter((item) => item.media_type === 'photo').length,
     uploadedVideos: visibleMedia.filter((item) => item.media_type === 'video').length,
     ownUploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
     ownUploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
     media: visibleMedia.map((item) => mapMediaItem(item, { revealed, sharedGallery, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
-    members: members.filter((member) => member.role === 'guest'),
-    memberNames: members.filter((member) => member.role === 'guest').map((member) => normalizeName(member.guest_name)),
+    members: guestMembers,
+    memberNames: guestMembers.map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
   };
