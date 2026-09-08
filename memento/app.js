@@ -19,6 +19,7 @@ const FEATURES = {
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/id0000000000';
+const reactionEmojis = ['👍', '❤️', '😂', '😍', '🥳', '😮', '😢', '🔥', '👏', '🙏', '🎉', '✨', '🥰', '😭', '🤩', '🫶'];
 
 function storageSet(key, value) {
   try {
@@ -70,6 +71,10 @@ const state = {
   inviteSheet: false,
   lastCaptureId: '',
   reactions: new Map(),
+  mediaReactionSummaries: new Map(),
+  mediaReactionMine: new Map(),
+  reactionPicker: null,
+  reactionsUnavailable: false,
   showCapturedBy: loadCapturedByPreference(),
   mode: 'photo',
   recording: false,
@@ -120,7 +125,7 @@ function resolveMementoConfig() {
 
 async function supabaseJson(path) {
   const response = await fetch(`${supabase.url}/rest/v1/${path}`, { headers: headers() });
-  if (!response.ok) throw new Error(`Supabase ${response.status}`);
+  if (!response.ok) throw new Error(await response.text().catch(() => `Supabase ${response.status}`));
   return response.json();
 }
 
@@ -151,6 +156,33 @@ async function supabaseInsert(path, body) {
   });
   if (!response.ok) throw new Error(`Supabase insert ${response.status}`);
   return response.json();
+}
+
+async function supabaseUpsert(path, body) {
+  const response = await fetch(`${supabase.url}/rest/v1/${path}`, {
+    method: 'POST',
+    headers: {
+      ...headers(),
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Prefer: `resolution=merge-duplicates,return=representation`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await response.text().catch(() => `Supabase upsert ${response.status}`));
+  return response.json();
+}
+
+async function supabaseDelete(path) {
+  const response = await fetch(`${supabase.url}/rest/v1/${path}`, {
+    method: 'DELETE',
+    headers: {
+      ...headers(),
+      Accept: 'application/json',
+      Prefer: 'return=minimal',
+    },
+  });
+  if (!response.ok) throw new Error(await response.text().catch(() => `Supabase delete ${response.status}`));
 }
 
 async function uploadStorageObject(path, blob, contentType) {
@@ -187,6 +219,7 @@ async function loadMemories(options = {}) {
   } finally {
     state.loading = false;
     await hydrateCoverImages(false);
+    await hydrateMediaReactions(false);
     scheduleRevealRefresh();
     scheduleEventRefresh();
     scheduleGallerySync();
@@ -200,6 +233,7 @@ function gallerySignature() {
     memory.revealed,
     memory.ended,
     memory.media.map((item) => [item.id, item.path, item.originalPath, item.locked, item.sync].join(':')).join('|'),
+    memory.media.map((item) => reactionSignature(item.id)).join('|'),
   ].join('~')).join('||');
 }
 
@@ -259,12 +293,18 @@ function mapMemory(row, members = [], media = [], inviteRow = null) {
     uploadedVideos: media.filter((item) => item.media_type === 'video').length,
     ownUploadedPhotos: guestMedia.filter((item) => item.media_type === 'photo').length,
     ownUploadedVideos: guestMedia.filter((item) => item.media_type === 'video').length,
-    media: visibleMedia.map((item) => mapMediaItem(item, { revealed, sharedGallery, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
+    media: visibleMedia.map((item) => mapMediaItem(item, { id: row.id, revealed, sharedGallery, revealAtLabel: revealTime ? revealDateLabel(revealTime) : 'later' })),
     members: guestMembers,
     memberNames: guestMembers.map((member) => normalizeName(member.guest_name)),
     coverPath: row.cover_thumbnail_path || row.cover_original_path || '',
     cover: '',
   };
+}
+
+function reactionSignature(mediaId) {
+  const summary = state.mediaReactionSummaries.get(mediaId) || [];
+  const mine = state.mediaReactionMine.get(mediaId) || '';
+  return `${mine}:${summary.map((entry) => `${entry.emoji}${entry.count}`).join(',')}`;
 }
 
 function isMediaVisibleForMemory(row, memory = {}) {
@@ -277,6 +317,7 @@ function mapMediaItem(row, memory = {}) {
   const isCurrentParticipant = isOwnMedia(row);
   return {
     id: row.id,
+    mementoId: memory.id || row.memento_id || '',
     type: row.media_type === 'video' ? 'video' : 'photo',
     path: row.thumbnail_path || '',
     originalPath: row.original_path,
@@ -492,6 +533,108 @@ async function storageObjectUrl(path) {
   return publicUrl;
 }
 
+async function hydrateMediaReactions(renderWhenDone = true) {
+  if (state.reactionsUnavailable) return;
+  const mediaIds = [...new Set(state.memories.flatMap((memory) => memory.media).filter((item) => !item.locked).map((item) => item.id))];
+  if (!mediaIds.length) {
+    state.mediaReactionSummaries.clear();
+    state.mediaReactionMine.clear();
+    return;
+  }
+  const reactorToken = currentReactorToken();
+  const idList = mediaIds.map((id) => encodeURIComponent(id)).join(',');
+  try {
+    const rows = await supabaseJson(`media_reactions?select=media_item_id,reactor_token,emoji&media_item_id=in.(${idList})`);
+    state.mediaReactionSummaries = summarizeMediaReactions(rows, mediaIds);
+    state.mediaReactionMine = currentMediaReactions(rows, reactorToken);
+    if (renderWhenDone) render();
+  } catch (error) {
+    if (missingReactionTable(error)) {
+      state.reactionsUnavailable = true;
+      state.mediaReactionSummaries.clear();
+      state.mediaReactionMine.clear();
+      return;
+    }
+  }
+}
+
+function summarizeMediaReactions(rows, mediaIds) {
+  const summaries = new Map(mediaIds.map((id) => [id, []]));
+  const countsByMedia = new Map();
+  rows.forEach((row) => {
+    if (!reactionEmojis.includes(row.emoji)) return;
+    if (!countsByMedia.has(row.media_item_id)) countsByMedia.set(row.media_item_id, new Map());
+    const counts = countsByMedia.get(row.media_item_id);
+    counts.set(row.emoji, (counts.get(row.emoji) || 0) + 1);
+  });
+  countsByMedia.forEach((counts, mediaId) => {
+    const sorted = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || reactionEmojis.indexOf(a[0]) - reactionEmojis.indexOf(b[0]))
+      .slice(0, 3)
+      .map(([emoji, count]) => ({ emoji, count }));
+    summaries.set(mediaId, sorted);
+  });
+  return summaries;
+}
+
+function currentMediaReactions(rows, reactorToken) {
+  const mine = new Map();
+  if (!reactorToken) return mine;
+  rows.forEach((row) => {
+    if (row.reactor_token === reactorToken && reactionEmojis.includes(row.emoji)) mine.set(row.media_item_id, row.emoji);
+  });
+  return mine;
+}
+
+function currentReactorToken() {
+  return state.guestToken || state.guest?.guestToken || routeGuestToken || getDeviceId();
+}
+
+function missingReactionTable(error) {
+  const message = String(error?.message || '');
+  return message.includes('PGRST205') || message.includes('Could not find the table');
+}
+
+async function setMediaReaction(mediaId, emoji) {
+  if (!mediaId || !reactionEmojis.includes(emoji) || state.reactionsUnavailable) return;
+  const reactorToken = currentReactorToken();
+  if (!reactorToken) return;
+  const current = state.mediaReactionMine.get(mediaId) || '';
+  const item = findMediaItem(mediaId);
+  state.reactionPicker = null;
+  try {
+    if (current === emoji) {
+      await supabaseDelete(`media_reactions?media_item_id=eq.${encodeURIComponent(mediaId)}&reactor_token=eq.${encodeURIComponent(reactorToken)}`);
+      state.mediaReactionMine.delete(mediaId);
+    } else {
+      await supabaseUpsert('media_reactions?on_conflict=media_item_id,reactor_token', {
+        media_item_id: mediaId,
+        ...(item?.mementoId ? { memento_id: item.mementoId } : {}),
+        reactor_token: reactorToken,
+        emoji,
+      });
+      state.mediaReactionMine.set(mediaId, emoji);
+    }
+    await hydrateMediaReactions(false);
+  } catch (error) {
+    if (missingReactionTable(error)) {
+      state.reactionsUnavailable = true;
+      state.mediaReactionSummaries.clear();
+      state.mediaReactionMine.clear();
+    }
+  } finally {
+    render();
+  }
+}
+
+function findMediaItem(mediaId) {
+  for (const memory of state.memories) {
+    const item = memory.media.find((mediaItem) => mediaItem.id === mediaId);
+    if (item) return item;
+  }
+  return null;
+}
+
 function currentMemory() {
   return state.memories.find((memory) => memory.id === state.selectedId) || state.memories[0] || null;
 }
@@ -532,6 +675,7 @@ function setView(next, id) {
     enterImmersiveMode();
   }
   state.guestMenuOpen = false;
+  state.reactionPicker = null;
   state.view = next;
   if (id) state.selectedId = id;
   render();
@@ -1012,7 +1156,7 @@ function guestGallery(memory) {
       <div class="gallery-controls"><button class="name-eye-toggle" type="button" data-captured-toggle aria-label="${state.showCapturedBy ? 'Hide names' : 'Show names'}">${icon(state.showCapturedBy ? 'eye' : 'eye-off')}</button><span class="gallery-count">${escapeHtml(momentLabel)}</span></div>
     </div>`;
   if (!items.length) return `${toggle}<section class="empty-gallery">${icon('image')}<strong>No moments yet</strong><p>Photos and videos taken here will appear in this gallery.</p></section>`;
-  return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index, memory)).join('')}</section>`;
+  return `${toggle}<section class="guest-gallery">${items.map((item, index) => mediaTile(item, index, memory)).join('')}</section>${reactionPicker()}`;
 }
 
 function mediaTile(item, index, memory) {
@@ -1027,7 +1171,33 @@ function mediaTile(item, index, memory) {
     : item.type === 'video'
     ? `${item.posterUrl || url ? `<img src="${item.posterUrl || url}" loading="lazy" alt="" style="${style}">` : `<span class="locked-placeholder">${icon('play')}</span>`}<span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="" style="${style}">`;
-  return `<button class="media-tile ${item.locked ? 'locked' : ''}" data-open-media="${index}" type="button">${media}${locked}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>`;
+  return `
+    <article class="media-tile ${item.locked ? 'locked' : ''}">
+      <button class="media-open" data-open-media="${index}" type="button">${media}${locked}${capturedBy}<small>${escapeHtml(item.sync || 'Uploaded')}</small></button>
+      ${reactionSummary(item)}
+    </article>`;
+}
+
+function reactionSummary(item) {
+  if (item.locked || state.reactionsUnavailable) return '';
+  const summary = state.mediaReactionSummaries.get(item.id) || [];
+  const mine = state.mediaReactionMine.get(item.id) || '';
+  const label = summary.length
+    ? summary.map((entry) => `${entry.emoji} ${entry.count}`).join(' ')
+    : 'React';
+  return `<button class="reaction-summary ${mine ? 'selected' : ''}" data-open-reaction-picker="${escapeHtml(item.id)}" type="button" aria-label="React to this moment">${escapeHtml(label)}</button>`;
+}
+
+function reactionPicker() {
+  const mediaId = state.reactionPicker;
+  if (!mediaId) return '';
+  const mine = state.mediaReactionMine.get(mediaId) || '';
+  return `
+    <div class="reaction-picker-backdrop" data-close-reaction-picker>
+      <div class="reaction-picker" role="dialog" aria-label="Choose reaction">
+        ${reactionEmojis.map((emoji) => `<button class="${mine === emoji ? 'selected' : ''}" data-set-reaction="${escapeHtml(mediaId)}" data-emoji-value="${escapeHtml(emoji)}" type="button">${escapeHtml(emoji)}</button>`).join('')}
+      </div>
+    </div>`;
 }
 
 function viewer(memory) {
@@ -1054,10 +1224,7 @@ function viewer(memory) {
       <div class="viewer-media" data-viewer-swipe>${media}</div>
       <button class="viewer-nav viewer-next" data-viewer-step="1" aria-label="Next moment" ${nextIndex == null ? 'disabled' : ''}>${icon('chevron-right')}</button>
       ${item.locked ? '' : `<div class="viewer-tools">
-        <button data-react="${item.id}" data-reaction="liked" class="${reaction.liked ? 'selected' : ''}" type="button">${icon('heart')} Like</button>
-        <button data-react="${item.id}" data-reaction="loved" class="${reaction.loved ? 'selected' : ''}" type="button">${icon('sparkle')} Love</button>
-        <label><span>${reaction.emoji || 'Emoji'}</span><input data-emoji="${item.id}" maxlength="2" inputmode="text" value="${escapeHtml(reaction.emoji || '')}"></label>
-        <label class="caption-field"><span>Text</span><input data-caption="${item.id}" maxlength="80" value="${escapeHtml(reaction.caption || '')}"></label>
+        ${state.reactionsUnavailable ? '' : `<button data-open-reaction-picker="${item.id}" class="${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button"><span>${escapeHtml(state.mediaReactionMine.get(item.id) || 'React')}</span></button>`}
         <button data-filter="${item.id}" data-filter-value="" type="button">Original</button>
         <button data-filter="${item.id}" data-filter-value="viewer-warm" type="button">Warm</button>
         <button data-filter="${item.id}" data-filter-value="viewer-mono" type="button">Mono</button>
@@ -1271,6 +1438,20 @@ function bind() {
     state.viewerDirection = 0;
     render();
     hydrateViewerOriginal();
+  }));
+  document.querySelectorAll('[data-open-reaction-picker]').forEach((button) => button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    state.reactionPicker = button.dataset.openReactionPicker;
+    render();
+  }));
+  document.querySelectorAll('[data-close-reaction-picker]').forEach((element) => element.addEventListener('click', (event) => {
+    if (event.target !== element) return;
+    state.reactionPicker = null;
+    render();
+  }));
+  document.querySelectorAll('[data-set-reaction]').forEach((button) => button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setMediaReaction(button.dataset.setReaction, button.dataset.emojiValue);
   }));
   document.querySelector('[data-open-last-capture]')?.addEventListener('click', (event) => {
     openLastCapture(event.currentTarget.dataset.id);

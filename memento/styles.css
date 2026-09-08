@@ -241,7 +241,8 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .name-eye-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .gallery-count { white-space: nowrap; color: var(--muted); font-size: 14px; line-height: 1; }
 .guest-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; align-items: start; }
-.media-tile { position: relative; min-height: 0; aspect-ratio: 4 / 5; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--field); padding: 0; color: inherit; }
+.media-tile { position: relative; min-height: 0; aspect-ratio: 4 / 5; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--field); color: inherit; }
+.media-open { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; color: inherit; }
 .media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; }
 .media-tile small { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 4px; background: rgb(0 0 0 / 48%); color: white; font-size: 10px; text-align: center; }
 .media-tile.locked { background: #151515; }
@@ -253,6 +254,12 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .captured-pill { position: absolute; left: 6px; bottom: 28px; z-index: 2; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-radius: 999px; background: rgb(0 0 0 / 42%); color: white; font-size: 10px; font-weight: 650; line-height: 1; backdrop-filter: blur(12px); }
 .media-tile .play { position: absolute; inset: 0; display: grid; place-items: center; color: white; }
 .media-tile .play svg { width: 34px; height: 34px; fill: rgb(255 255 255 / 88%); stroke: none; filter: drop-shadow(0 2px 8px rgb(0 0 0 / 60%)); }
+.reaction-summary { position: absolute; left: 6px; right: auto; top: 6px; z-index: 4; min-height: 26px; max-width: calc(100% - 12px); padding: 0 8px; border: 1px solid rgb(255 255 255 / 18%); border-radius: 999px; background: rgb(0 0 0 / 46%); color: white; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; backdrop-filter: blur(12px); }
+.reaction-summary.selected { background: rgb(255 255 255 / 86%); color: #111; }
+.reaction-picker-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; align-items: end; padding: 18px; background: rgb(0 0 0 / 34%); }
+.reaction-picker { width: min(420px, 100%); margin: 0 auto; display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; padding: 10px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 22px; background: rgb(12 12 12 / 94%); box-shadow: 0 18px 60px rgb(0 0 0 / 42%); backdrop-filter: blur(18px); }
+.reaction-picker button { min-height: 44px; padding: 0; border: 1px solid rgb(255 255 255 / 10%); border-radius: 14px; background: rgb(255 255 255 / 8%); font-size: 22px; line-height: 1; }
+.reaction-picker button.selected { background: white; border-color: white; }
 .empty-gallery { min-height: 180px; display: grid; place-items: center; align-content: center; justify-items: center; gap: 10px; padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: center; }
 .empty-gallery svg { width: 30px; height: 30px; color: var(--ink); fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.9; }
 .empty-gallery strong { color: var(--ink); font-size: 18px; font-weight: 650; line-height: 1.1; }
