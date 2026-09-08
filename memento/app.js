@@ -794,6 +794,7 @@ function join() {
   const videoRemaining = remainingFor(memory, 'video');
   const available = `${photoRemaining} ${photoRemaining === 1 ? 'shot' : 'shots'}${memory.videos ? `, ${videoRemaining} ${videoRemaining === 1 ? 'video' : 'videos'}` : ''} available`;
   const ended = eventEnded(memory);
+  const fullForNewGuest = newGuestCapacityFull(memory);
   const actionText = `Continue to event ${icon('arrow-right')}`;
   const duplicateName = state.duplicateGuest?.name || '';
   const showScannerGate = shouldShowBrowserGuidance(returningGuest);
@@ -809,8 +810,9 @@ function join() {
     </div>
   ` : `
     ${returningGuest ? `<p class="welcome-back">${icon('check')} Welcome back, ${escapeHtml(currentParticipantName())}!</p>` : ''}
+    ${!returningGuest && fullForNewGuest ? '<p class="form-error">This Memento is full.</p>' : ''}
     ${!state.nameSheetOpen && state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-      <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${ended && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : `Get started ${icon('arrow-right')}`}</button>
+      <button class="take-camera" ${returningGuest ? `type="button" data-view="detail" data-id="${memory.id}"` : 'type="button" data-open-name-sheet'} ${(ended || fullForNewGuest) && !returningGuest ? 'disabled' : ''}>${returningGuest ? actionText : ended ? 'Memento has ended' : fullForNewGuest ? 'This Memento is full.' : `Get started ${icon('arrow-right')}`}</button>
   `;
   const nameSheet = state.nameSheetOpen && !returningGuest ? `
     <div class="name-sheet-backdrop" data-close-name-sheet>
@@ -826,8 +828,8 @@ function join() {
           <button class="sheet-secondary" type="button" data-reset-join-name>Use another name</button>
         ` : `
           <label class="name-pill sheet-name-pill">${icon('edit')}<input name="guest_name" autocomplete="name" maxlength="40" placeholder="Enter your name" required autofocus></label>
-          ${state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
-          <button class="take-camera" type="submit" ${ended ? 'disabled' : ''}>${ended ? 'Memento has ended' : `Take your camera ${icon('arrow-right')}`}</button>
+          ${fullForNewGuest ? '<p class="form-error">This Memento is full.</p>' : state.joinError ? `<p class="form-error">${escapeHtml(state.joinError)}</p>` : ''}
+          <button class="take-camera" type="submit" ${ended || fullForNewGuest ? 'disabled' : ''}>${ended ? 'Memento has ended' : fullForNewGuest ? 'This Memento is full.' : `Take your camera ${icon('arrow-right')}`}</button>
         `}
       </form>
     </div>` : '';
@@ -1512,8 +1514,8 @@ async function joinMemento(event) {
   state.duplicateGuest = null;
   state.nameSheetOpen = true;
 
-  if (memory.guestLimit > 0 && memory.joined >= memory.guestLimit) {
-    state.joinError = 'This Memento is already full.';
+  if (newGuestCapacityFull(memory)) {
+    state.joinError = 'This Memento is full.';
     render();
     return;
   }
@@ -1581,6 +1583,11 @@ async function joinMemento(event) {
 function existingGuestByName(memory, name) {
   const normalized = normalizeName(name);
   return memory.members?.find((item) => normalizeName(item.guest_name) === normalized);
+}
+
+function newGuestCapacityFull(memory) {
+  if (!memory || memory.guestLimit === 999) return false;
+  return memory.joined >= memory.guestLimit;
 }
 
 async function confirmExistingGuest() {
@@ -1715,9 +1722,14 @@ function duplicateJoinError(error) {
 }
 
 function joinErrorMessage(error) {
+  if (fullJoinError(error)) return 'This Memento is full.';
   if (duplicateJoinError(error)) return 'This name has already joined. Please use a different name.';
   const detail = readableSupabaseError(error);
   return detail ? `Could not join this Memento. ${detail}` : 'Could not join this Memento. Please try again.';
+}
+
+function fullJoinError(error) {
+  return String(error?.message || '').toLowerCase().includes('this memento is full');
 }
 
 function readableSupabaseError(error) {
