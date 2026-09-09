@@ -55,7 +55,8 @@ const state = {
   joinError: '',
   nameSheetOpen: false,
   duplicateGuest: null,
-  scannerGateLocked: shouldLockScannerGateAtStartup(),
+  // Scanner/browser gating is paused while App Clip handles QR entry.
+  scannerGateLocked: false,
   scannerGateCopied: false,
   galleryNotice: '',
   guestMenuOpen: false,
@@ -1815,6 +1816,8 @@ function isLikelyInAppBrowser() {
 }
 
 function shouldShowBrowserGuidance(returningGuest) {
+  // App Clip is now the primary QR path, so browser scanner checks stay disabled.
+  return false;
   if (state.browserIntent) return false;
   if (!state.inviteCode || returningGuest || state.nameSheetOpen) return false;
   if (isRealChromeBrowser()) return false;
