@@ -19,6 +19,8 @@ const FEATURES = {
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/id0000000000';
+const GALLERY_SYNC_INTERVAL_MS = 25000;
+const REACTION_SYNC_INTERVAL_MS = 10000;
 const reactionEmojis = ['👍', '❤️', '😂', '😍', '🥳', '😮', '😢', '🔥', '👏', '🙏', '🎉', '✨', '🥰', '😭', '🤩', '🫶'];
 
 function storageSet(key, value) {
@@ -85,6 +87,7 @@ const state = {
 let revealRefreshTimer = null;
 let eventRefreshTimer = null;
 let gallerySyncTimer = null;
+let reactionSyncTimer = null;
 let viewportHeight = 0;
 let viewportTop = 0;
 let viewportSettlingView = '';
@@ -224,6 +227,7 @@ async function loadMemories(options = {}) {
     scheduleRevealRefresh();
     scheduleEventRefresh();
     scheduleGallerySync();
+    scheduleReactionSync();
     if (!options.renderOnlyWhenChanged || previousSignature !== gallerySignature()) render();
   }
 }
@@ -742,10 +746,20 @@ function scheduleEventRefresh() {
 
 function scheduleGallerySync() {
   window.clearTimeout(gallerySyncTimer);
-  if (!state.inviteCode || state.view !== 'detail' || state.viewer != null) return;
+  if (document.visibilityState === 'hidden' || !state.inviteCode || state.view !== 'detail' || state.viewer != null) return;
   gallerySyncTimer = window.setTimeout(() => {
-    if (state.view === 'detail' && state.viewer == null) loadMemories({ quiet: true, renderOnlyWhenChanged: true });
-  }, 7000);
+    if (document.visibilityState !== 'hidden' && state.view === 'detail' && state.viewer == null) loadMemories({ quiet: true, renderOnlyWhenChanged: true });
+  }, GALLERY_SYNC_INTERVAL_MS);
+}
+
+function scheduleReactionSync() {
+  window.clearTimeout(reactionSyncTimer);
+  if (document.visibilityState === 'hidden' || state.reactionsUnavailable || !state.inviteCode || state.view !== 'detail') return;
+  reactionSyncTimer = window.setTimeout(async () => {
+    if (document.visibilityState === 'hidden' || state.view !== 'detail') return;
+    await hydrateMediaReactions(true);
+    scheduleReactionSync();
+  }, REACTION_SYNC_INTERVAL_MS);
 }
 
 async function refreshCurrentEventState() {
@@ -1393,6 +1407,7 @@ function render() {
   stabilizeJoinViewport();
   stabilizeCameraViewport();
   scheduleGallerySync();
+  scheduleReactionSync();
 }
 
 function bind() {
