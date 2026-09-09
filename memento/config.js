@@ -9,11 +9,13 @@ window.MEMENTO_CONFIG = {
     supabaseUrl: 'https://omtdedqgtheuutxqzoij.supabase.co',
     supabaseAnonKey: 'sb_publishable_k19PA2vgSv5VxLircw_5Vw_sAHzzCUm',
     originalsBucket: 'memento-originals',
+    rendersBucket: 'memento-renders',
   },
   production: {
     project: 'memento-prd',
     supabaseUrl: 'https://lnxlxdgozvqodwmtuuhr.supabase.co',
     supabaseAnonKey: 'sb_publishable_nsJPpnP8TDCFqd5T-*mWaQ_qM00V21*',
     originalsBucket: 'memento-originals',
+    rendersBucket: 'memento-renders',
   },
 };

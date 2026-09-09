@@ -12,6 +12,7 @@ const supabase = {
   url: config.supabaseUrl,
   anonKey: config.supabaseAnonKey,
   originalsBucket: config.originalsBucket,
+  rendersBucket: config.rendersBucket,
 };
 
 const FEATURES = {
@@ -111,6 +112,7 @@ function resolveMementoConfig() {
     supabaseUrl: active.supabaseUrl || '',
     supabaseAnonKey: active.supabaseAnonKey || '',
     originalsBucket: active.originalsBucket || 'memento-originals',
+    rendersBucket: active.rendersBucket || 'memento-renders',
   };
   const hasPlaceholder = [resolved.supabaseUrl, resolved.supabaseAnonKey].some((value) => value.includes('REPLACE_WITH_'));
 
@@ -189,9 +191,9 @@ async function supabaseDelete(path) {
   if (!response.ok) throw new Error(await response.text().catch(() => `Supabase delete ${response.status}`));
 }
 
-async function uploadStorageObject(path, blob, contentType) {
+async function uploadStorageObject(path, blob, contentType, bucket = supabase.originalsBucket) {
   const normalized = path.split('/').map(encodeURIComponent).join('/');
-  const response = await fetch(`${supabase.url}/storage/v1/object/${supabase.originalsBucket}/${normalized}`, {
+  const response = await fetch(`${supabase.url}/storage/v1/object/${bucket}/${normalized}`, {
     method: 'POST',
     headers: {
       ...headers(),
@@ -237,7 +239,7 @@ function gallerySignature() {
     memory.id,
     memory.revealed,
     memory.ended,
-    memory.media.map((item) => [item.id, item.path, item.originalPath, item.locked, item.sync].join(':')).join('|'),
+    memory.media.map((item) => [item.id, item.path, item.pathBucket, item.viewerPath, item.originalPath, item.locked, item.sync].join(':')).join('|'),
     memory.media.map((item) => reactionSignature(item.id)).join('|'),
   ].join('~')).join('||');
 }
@@ -254,7 +256,7 @@ async function fetchGuestMementos() {
   const [rows, members, media] = await Promise.all([
     supabaseJson(`mementos?select=*&id=eq.${encodeURIComponent(mementoId)}&limit=1`),
     supabaseJson(`memento_members?select=id,guest_name,role,device_id,guest_return_token&memento_id=eq.${encodeURIComponent(mementoId)}`),
-    supabaseJson(`media_items?select=id,member_id,media_type,original_path,thumbnail_path,taken_at,uploaded_at,created_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=taken_at.desc.nullslast&order=uploaded_at.desc.nullslast&order=created_at.desc.nullslast`),
+    supabaseJson(`media_items?select=id,member_id,media_type,original_path,render_path,thumbnail_path,taken_at,uploaded_at,created_at,captured_by_name&memento_id=eq.${encodeURIComponent(mementoId)}&order=taken_at.desc.nullslast&order=uploaded_at.desc.nullslast&order=created_at.desc.nullslast`),
   ]);
   return rows.map((row) => mapMemory(row, members, media, inviteRow));
 }
@@ -269,7 +271,7 @@ function mapMemory(row, members = [], media = [], inviteRow = null) {
   const revealed = revealMode === 'live' || (revealTime && Date.now() >= revealTime.getTime());
   const ended = end ? Date.now() >= end.getTime() : false;
   const sharedGallery = Boolean(row.host_preview_before_reveal);
-  const visibleMedia = media.filter((item) => isMediaVisibleForMemory(item, { revealed, sharedGallery }));
+  const visibleMedia = media.filter((item) => item.media_type !== 'video' && isMediaVisibleForMemory(item, { revealed, sharedGallery }));
   const guestMembers = members.filter((member) => member.role === 'guest');
 
   return {
@@ -320,12 +322,19 @@ function isMediaVisibleForMemory(row, memory = {}) {
 
 function mapMediaItem(row, memory = {}) {
   const isCurrentParticipant = isOwnMedia(row);
+  const displayPath = row.render_path || row.original_path || row.thumbnail_path || '';
+  const displayBucket = row.render_path ? supabase.rendersBucket : supabase.originalsBucket;
   return {
     id: row.id,
     mementoId: memory.id || row.memento_id || '',
     type: row.media_type === 'video' ? 'video' : 'photo',
-    path: row.thumbnail_path || '',
+    path: displayPath,
+    pathBucket: displayBucket,
+    viewerPath: displayPath,
+    viewerBucket: displayBucket,
     originalPath: row.original_path,
+    originalBucket: supabase.originalsBucket,
+    renderPath: row.render_path || '',
     locked: memory.sharedGallery && !memory.revealed && !isCurrentParticipant,
     revealLabel: `Reveals ${memory.revealAtLabel || 'later'}`,
     capturedByName: row.captured_by_name || (isCurrentParticipant ? currentParticipantName() : ''),
@@ -506,19 +515,20 @@ async function hydrateCoverImages(renderWhenDone = true) {
       }
     }
     memory.media.forEach((item) => {
-      // Gallery grids stay on thumbnails; originals are fetched only by the full viewer/playback.
-      if (!item.locked && item.path) paths.push(item.path);
+      // Guest display uses compressed renders; originals stay as a fallback only.
+      if (!item.locked && item.path) paths.push({ path: item.path, bucket: item.pathBucket || supabase.originalsBucket });
     });
   }));
-  await Promise.all(paths.map((path) => storageObjectUrl(path)));
+  await Promise.all(paths.map((item) => storageObjectUrl(item.path, item.bucket)));
   if (renderWhenDone) render();
 }
 
-async function storageObjectUrl(path) {
+async function storageObjectUrl(path, bucket = supabase.originalsBucket) {
   if (!path) return '';
-  if (state.mediaUrls.has(path)) return state.mediaUrls.get(path);
+  const cacheKey = storageUrlCacheKey(bucket, path);
+  if (state.mediaUrls.has(cacheKey)) return state.mediaUrls.get(cacheKey);
   const normalized = path.split('/').map(encodeURIComponent).join('/');
-  const signed = await fetch(`${supabase.url}/storage/v1/object/sign/${supabase.originalsBucket}/${normalized}`, {
+  const signed = await fetch(`${supabase.url}/storage/v1/object/sign/${bucket}/${normalized}`, {
     method: 'POST',
     headers: {
       ...headers(),
@@ -529,13 +539,17 @@ async function storageObjectUrl(path) {
   if (signed.ok) {
     const data = await signed.json();
     const url = data.signedURL?.startsWith('http') ? data.signedURL : `${supabase.url}/storage/v1${data.signedURL}`;
-    state.mediaUrls.set(path, url);
+    state.mediaUrls.set(cacheKey, url);
     return url;
   }
 
-  const publicUrl = `${supabase.url}/storage/v1/object/public/${supabase.originalsBucket}/${normalized}`;
-  state.mediaUrls.set(path, publicUrl);
+  const publicUrl = `${supabase.url}/storage/v1/object/public/${bucket}/${normalized}`;
+  state.mediaUrls.set(cacheKey, publicUrl);
   return publicUrl;
+}
+
+function storageUrlCacheKey(bucket, path) {
+  return `${bucket}:${path}`;
 }
 
 async function hydrateMediaReactions(renderWhenDone = true) {
@@ -664,13 +678,17 @@ function filterForStyle(memory) {
 }
 
 function galleryMediaUrl(item) {
-  if (item.locked) return item.localUrl || state.mediaUrls.get(item.path) || '';
-  return item.localUrl || state.mediaUrls.get(item.path) || '';
+  const key = storageUrlCacheKey(item.pathBucket || supabase.originalsBucket, item.path);
+  if (item.locked) return item.localUrl || state.mediaUrls.get(key) || '';
+  return item.localUrl || state.mediaUrls.get(key) || '';
 }
 
 function viewerMediaUrl(item) {
-  if (item.locked) return item.localUrl || state.mediaUrls.get(item.path) || '';
-  return item.localUrl || state.mediaUrls.get(item.originalPath) || '';
+  const viewerPath = item.viewerPath || item.path || item.originalPath;
+  const viewerBucket = item.viewerBucket || item.pathBucket || item.originalBucket || supabase.originalsBucket;
+  const key = storageUrlCacheKey(viewerBucket, viewerPath);
+  if (item.locked) return item.localUrl || state.mediaUrls.get(key) || '';
+  return item.localUrl || state.mediaUrls.get(key) || '';
 }
 
 function setView(next, id) {
@@ -1595,8 +1613,10 @@ function moveViewer(step) {
 function hydrateViewerOriginal() {
   const memory = currentMemory();
   const item = memory && state.viewer != null ? galleryItems(memory)[state.viewer] : null;
-  if (!item || item.locked || item.localUrl || !item.originalPath || state.mediaUrls.has(item.originalPath)) return;
-  storageObjectUrl(item.originalPath).then(() => {
+  const viewerPath = item?.viewerPath || item?.path || item?.originalPath || '';
+  const viewerBucket = item?.viewerBucket || item?.pathBucket || item?.originalBucket || supabase.originalsBucket;
+  if (!item || item.locked || item.localUrl || !viewerPath || state.mediaUrls.has(storageUrlCacheKey(viewerBucket, viewerPath))) return;
+  storageObjectUrl(viewerPath, viewerBucket).then(() => {
     if (state.viewer != null) render();
   }).catch(() => {});
 }
@@ -1617,8 +1637,8 @@ function openLastCapture(memoryId) {
 }
 
 function galleryItems(memory) {
-  const local = (state.localCaptures.get(memory.id) || []).filter((item) => item.sync !== 'Uploaded');
-  return [...local, ...memory.media].sort(compareMediaNewestFirst);
+  const local = (state.localCaptures.get(memory.id) || []).filter((item) => item.sync !== 'Uploaded' && item.type !== 'video');
+  return [...local, ...memory.media].filter((item) => item.type !== 'video').sort(compareMediaNewestFirst);
 }
 
 function compareMediaNewestFirst(a, b) {
@@ -2559,15 +2579,27 @@ async function uploadCapture(memory, item, blob, contentType) {
   const uploadType = item.type === 'video' ? 'video/mp4' : normalizedContentType(contentType);
   const extension = uploadType.includes('video') ? videoExtension(uploadType) : 'jpg';
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
+  const renderPath = item.type === 'photo' ? `mementos/${memory.id}/renders/${item.id}.jpg` : null;
   const thumbnailPath = `mementos/${memory.id}/thumbs/${item.id}.jpg`;
   const thumbnailBlob = await generateBlurredThumbnail(item, blob).catch(() => null);
+  const renderBlob = item.type === 'photo' ? await generateDisplayPhotoBlob(item, blob).catch(() => null) : null;
+  let uploadedRenderPath = null;
   if (thumbnailBlob) await uploadStorageObject(thumbnailPath, thumbnailBlob, 'image/jpeg');
   await uploadStorageObject(storagePath, blob, uploadType);
+  if (renderBlob && renderPath) {
+    try {
+      await uploadStorageObject(renderPath, renderBlob, 'image/jpeg', supabase.rendersBucket);
+      uploadedRenderPath = renderPath;
+    } catch {
+      uploadedRenderPath = null;
+    }
+  }
   await supabaseInsert('media_items?select=id', {
     memento_id: memory.id,
     member_id: state.guest.memberId,
     media_type: item.type,
     original_path: storagePath,
+    render_path: uploadedRenderPath,
     thumbnail_path: thumbnailBlob ? thumbnailPath : null,
     captured_by_name: item.capturedByName || currentParticipantName(),
     file_size_bytes: blob.size,
@@ -2583,6 +2615,24 @@ async function uploadCapture(memory, item, blob, contentType) {
     memory.ownUploadedVideos += 1;
   }
   markCapture(memory.id, item.id, 'Uploaded');
+}
+
+async function generateDisplayPhotoBlob(item, blob) {
+  if ('createImageBitmap' in window) {
+    const bitmap = await createImageBitmap(blob);
+    try {
+      return imageSourceToDisplayBlob(bitmap, bitmap.width, bitmap.height);
+    } finally {
+      bitmap.close?.();
+    }
+  }
+  const url = item.localUrl || URL.createObjectURL(blob);
+  try {
+    const image = await loadImage(url);
+    return imageSourceToDisplayBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height);
+  } finally {
+    if (!item.localUrl) URL.revokeObjectURL(url);
+  }
 }
 
 async function generateBlurredThumbnail(item, blob) {
@@ -2624,6 +2674,26 @@ function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred =
       canvas.toBlob((blob) => resolve(blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.62))), 'image/jpeg', 0.62);
     } else {
       resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.62)));
+    }
+  });
+}
+
+function imageSourceToDisplayBlob(source, sourceWidth, sourceHeight) {
+  const maxEdge = 1600;
+  const scale = Math.min(1, maxEdge / Math.max(sourceWidth || maxEdge, sourceHeight || maxEdge));
+  const width = Math.max(1, Math.round((sourceWidth || maxEdge) * scale));
+  const height = Math.max(1, Math.round((sourceHeight || maxEdge) * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas unavailable');
+  context.drawImage(source, 0, 0, width, height);
+  return new Promise((resolve) => {
+    if (canvas.toBlob) {
+      canvas.toBlob((blob) => resolve(blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.78))), 'image/jpeg', 0.78);
+    } else {
+      resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.78)));
     }
   });
 }
