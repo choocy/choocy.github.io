@@ -265,13 +265,12 @@ function mapMemory(row, members = [], media = [], inviteRow = null) {
   const start = parseDate(row.start_time);
   const end = parseDate(row.end_time);
   const revealTime = parseDate(row.reveal_time) || end;
-  const currentName = normalizeName(currentParticipantName());
-  const guestMedia = currentName ? media.filter((item) => mediaCapturedByName(item) === currentName) : [];
+  const guestMedia = media.filter((item) => isOwnMedia(item));
   const revealMode = String(row.reveal_mode || '').toLowerCase();
   const revealed = revealMode === 'live' || (revealTime && Date.now() >= revealTime.getTime());
   const ended = end ? Date.now() >= end.getTime() : false;
   const sharedGallery = Boolean(row.host_preview_before_reveal);
-  const visibleMedia = media.filter((item) => item.media_type !== 'video' && isMediaVisibleForMemory(item, { revealed, sharedGallery }));
+  const visibleMedia = media.filter((item) => isMediaVisibleForMemory(item, { revealed, sharedGallery }));
   const guestMembers = members.filter((member) => member.role === 'guest');
 
   return {
@@ -315,26 +314,32 @@ function reactionSignature(mediaId) {
 }
 
 function isMediaVisibleForMemory(row, memory = {}) {
+  if (isHostViewer()) return true;
   if (isOwnMedia(row)) return true;
-  if (!memory.sharedGallery) return false;
-  return true;
+  if (row.media_type === 'video' || row.type === 'video') return false;
+  return Boolean(memory.sharedGallery);
 }
 
 function mapMediaItem(row, memory = {}) {
   const isCurrentParticipant = isOwnMedia(row);
-  const locked = memory.sharedGallery && !memory.revealed && !isCurrentParticipant;
-  const displayPath = locked
+  const isVideo = row.media_type === 'video';
+  const locked = !isHostViewer() && !isCurrentParticipant && !memory.sharedGallery;
+  const displayPath = isVideo
+    ? row.thumbnail_path || ''
+    : locked
     ? row.thumbnail_path || ''
     : row.render_path || row.original_path || row.thumbnail_path || '';
-  const displayBucket = row.render_path && displayPath === row.render_path ? supabase.rendersBucket : supabase.originalsBucket;
+  const displayBucket = !isVideo && row.render_path && displayPath === row.render_path ? supabase.rendersBucket : supabase.originalsBucket;
+  const viewerPath = isVideo ? row.original_path || '' : displayPath;
+  const viewerBucket = isVideo ? supabase.originalsBucket : displayBucket;
   return {
     id: row.id,
     mementoId: memory.id || row.memento_id || '',
-    type: row.media_type === 'video' ? 'video' : 'photo',
+    type: isVideo ? 'video' : 'photo',
     path: displayPath,
     pathBucket: displayBucket,
-    viewerPath: displayPath,
-    viewerBucket: displayBucket,
+    viewerPath,
+    viewerBucket,
     originalPath: row.original_path,
     originalBucket: supabase.originalsBucket,
     renderPath: row.render_path || '',
@@ -347,8 +352,17 @@ function mapMediaItem(row, memory = {}) {
 }
 
 function isOwnMedia(row) {
+  const currentMemberId = state.guest?.memberId || '';
+  const rowMemberId = row.member_id || row.memberId || '';
+  if (currentMemberId && rowMemberId) return currentMemberId === rowMemberId;
   const currentName = normalizeName(currentParticipantName());
   return Boolean(currentName && mediaCapturedByName(row) === currentName);
+}
+
+function isHostViewer() {
+  // Do not trust client-local role for host media visibility.
+  // Host-all-media requires a server-authenticated host session.
+  return false;
 }
 
 function mediaCapturedByName(row) {
@@ -1645,8 +1659,11 @@ function openLastCapture(memoryId) {
 }
 
 function galleryItems(memory) {
-  const local = (state.localCaptures.get(memory.id) || []).filter((item) => item.sync !== 'Uploaded' && item.type !== 'video');
-  return [...local, ...memory.media].filter((item) => item.type !== 'video').sort(compareMediaNewestFirst);
+  const local = (state.localCaptures.get(memory.id) || [])
+    .filter((item) => item.sync !== 'Uploaded' && isMediaVisibleForMemory(item, memory));
+  return [...local, ...memory.media]
+    .filter((item) => isMediaVisibleForMemory(item, memory))
+    .sort(compareMediaNewestFirst);
 }
 
 function compareMediaNewestFirst(a, b) {
