@@ -323,7 +323,7 @@ function isMediaVisibleForMemory(row, memory = {}) {
 function mapMediaItem(row, memory = {}) {
   const isCurrentParticipant = isOwnMedia(row);
   const isVideo = row.media_type === 'video';
-  const locked = !isHostViewer() && !isCurrentParticipant && !memory.sharedGallery;
+  const locked = !isHostViewer() && !isCurrentParticipant && !memory.revealed;
   const displayPath = isVideo
     ? row.thumbnail_path || ''
     : locked
