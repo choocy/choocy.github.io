@@ -11,9 +11,9 @@ Use `memento/config.js` as the static deployment equivalent of:
 
 - Local, dev, and staging use the `development` entry and must point to `memento-dev`.
 - `choocy.app` and `www.choocy.app` use the `production` entry and must point to `memento-prd`.
-- During dev testing on the public host, append `?env=dev` to the invite URL to explicitly use `memento-dev`.
+- During dev testing on the public host, append `?env=dev` to the invite URL to explicitly use `memento-dev`. Keep that parameter on any app handoff or browser fallback link for the same test session.
 - Production intentionally fails closed if `memento/config.js` is not configured for `project: "memento-prd"`, if production placeholders are still present, or if production points to the dev Supabase URL.
-- A small `DEV` badge appears only outside the production hosts when the Web UI is using the `memento-dev` config.
+- A small `DEV` badge appears whenever the Web UI is using the `memento-dev` config, including `choocy.app` links with `?env=dev`. The badge is hidden for production.
 
 ## Setup
 

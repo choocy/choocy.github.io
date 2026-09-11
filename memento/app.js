@@ -1678,7 +1678,10 @@ function currentHandoffGuestToken(memory = currentMemory()) {
 function appInviteUrl(code = state.inviteCode, guestToken = currentHandoffGuestToken()) {
   if (!code) return '';
   const token = String(guestToken || '').trim();
-  const suffix = token ? `?guest_token=${encodeURIComponent(token)}` : '';
+  const params = new URLSearchParams();
+  if (token) params.set('guest_token', token);
+  if (routeEnvironment) params.set('env', routeEnvironment);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
   return `memento://invite/${encodeURIComponent(code)}${suffix}`;
 }
 
@@ -1687,6 +1690,7 @@ function appUniversalInviteUrl(code = state.inviteCode, guestToken = currentHand
   const params = new URLSearchParams({ invite: code });
   const token = String(guestToken || '').trim();
   if (token) params.set('guest_token', token);
+  if (routeEnvironment) params.set('env', routeEnvironment);
   return `${location.origin}/memento/?${params.toString()}`;
 }
 
