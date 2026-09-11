@@ -322,8 +322,11 @@ function isMediaVisibleForMemory(row, memory = {}) {
 
 function mapMediaItem(row, memory = {}) {
   const isCurrentParticipant = isOwnMedia(row);
-  const displayPath = row.render_path || row.original_path || row.thumbnail_path || '';
-  const displayBucket = row.render_path ? supabase.rendersBucket : supabase.originalsBucket;
+  const locked = memory.sharedGallery && !memory.revealed && !isCurrentParticipant;
+  const displayPath = locked
+    ? row.thumbnail_path || ''
+    : row.render_path || row.original_path || row.thumbnail_path || '';
+  const displayBucket = row.render_path && displayPath === row.render_path ? supabase.rendersBucket : supabase.originalsBucket;
   return {
     id: row.id,
     mementoId: memory.id || row.memento_id || '',
@@ -335,7 +338,7 @@ function mapMediaItem(row, memory = {}) {
     originalPath: row.original_path,
     originalBucket: supabase.originalsBucket,
     renderPath: row.render_path || '',
-    locked: memory.sharedGallery && !memory.revealed && !isCurrentParticipant,
+    locked,
     revealLabel: `Reveals ${memory.revealAtLabel || 'later'}`,
     capturedByName: row.captured_by_name || (isCurrentParticipant ? currentParticipantName() : ''),
     capturedAt: mediaTimestamp(row),
@@ -516,7 +519,7 @@ async function hydrateCoverImages(renderWhenDone = true) {
     }
     memory.media.forEach((item) => {
       // Guest display uses compressed renders; originals stay as a fallback only.
-      if (!item.locked && item.path) paths.push({ path: item.path, bucket: item.pathBucket || supabase.originalsBucket });
+      if (item.path) paths.push({ path: item.path, bucket: item.pathBucket || supabase.originalsBucket });
     });
   }));
   await Promise.all(paths.map((item) => storageObjectUrl(item.path, item.bucket)));
@@ -1200,7 +1203,9 @@ function mediaTile(item, index, memory) {
     : '';
   const locked = item.locked ? `<span class="locked-label">${escapeHtml(item.revealLabel)}</span>` : '';
   const media = item.locked
-    ? `<span class="locked-placeholder">${icon('lock')}</span>`
+    ? url
+      ? `<img class="locked-preview" src="${url}" loading="lazy" alt="">`
+      : `<span class="locked-placeholder">${icon('lock')}</span>`
     : item.type === 'video'
     ? `${item.posterUrl || url ? `<img src="${item.posterUrl || url}" loading="lazy" alt="" style="${style}">` : `<span class="locked-placeholder">${icon('play')}</span>`}<span class="play">${icon('play')}</span>`
     : `<img src="${url}" loading="lazy" alt="" style="${style}">`;
@@ -1270,7 +1275,10 @@ function viewerMediaElement(item, url, reaction, className, active, memory) {
   const classes = `${className} ${reaction.filter || ''}`.trim();
   const style = unlockedMediaFilter(item, memory, reaction);
   if (item.locked) {
-    return `<div class="${classes} locked-viewer-placeholder">${icon('lock')}</div><span class="viewer-lock-label">${escapeHtml(item.revealLabel)}</span>`;
+    const preview = url
+      ? `<img class="${classes} locked-preview" src="${url}" alt="">`
+      : `<div class="${classes} locked-viewer-placeholder">${icon('lock')}</div>`;
+    return `${preview}<span class="viewer-lock-label">${escapeHtml(item.revealLabel)}</span>`;
   }
   if (!url) return `<div class="${classes} locked-viewer-placeholder">${icon('image')}</div>`;
   return item.type === 'video'

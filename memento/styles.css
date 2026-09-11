@@ -247,7 +247,7 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
 .media-tile small { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 4px; background: rgb(0 0 0 / 48%); color: white; font-size: 10px; text-align: center; }
 .media-tile.locked { background: #151515; }
 .media-tile.locked small { display: none; }
-.locked-preview { filter: brightness(.7); transform: scale(1.01); }
+.locked-preview { filter: blur(16px) brightness(.46) saturate(.72); transform: scale(1.08); }
 .locked-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: rgb(255 255 255 / 42%); background: linear-gradient(135deg, #191919, #252525); }
 .locked-placeholder svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .locked-label { position: absolute; left: 50%; top: 50%; z-index: 3; width: max-content; max-width: calc(100% - 14px); transform: translate(-50%, -50%); padding: 5px 8px; border-radius: 999px; background: rgb(0 0 0 / 52%); color: white; font-size: 10px; font-weight: 650; line-height: 1.15; text-align: center; backdrop-filter: blur(12px); }
