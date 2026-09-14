@@ -2461,9 +2461,10 @@ async function capturePhoto(video, style = 'Original') {
     try {
       const imageCapture = new ImageCapture(activeTrack);
       const blob = await imageCapture.takePhoto();
+      const localBlob = await generateDisplayPhotoBlob({ type: 'photo' }, blob).catch(() => blob);
       return {
         blob,
-        localUrl: URL.createObjectURL(blob),
+        localUrl: URL.createObjectURL(localBlob),
       };
     } catch {
       try {
@@ -2752,7 +2753,7 @@ async function uploadCapture(memory, item, blob, contentType) {
 
 async function generateDisplayPhotoBlob(item, blob) {
   if ('createImageBitmap' in window) {
-    const bitmap = await createImageBitmap(blob);
+    const bitmap = await createOrientedImageBitmap(blob);
     try {
       return imageSourceToDisplayBlob(bitmap, bitmap.width, bitmap.height);
     } finally {
@@ -2778,7 +2779,7 @@ async function generateBlurredThumbnail(item, blob) {
     }
   }
   if ('createImageBitmap' in window) {
-    const bitmap = await createImageBitmap(blob);
+    const bitmap = await createOrientedImageBitmap(blob);
     try {
       return imageSourceToThumbnailBlob(bitmap, bitmap.width, bitmap.height, true);
     } finally {
@@ -2791,6 +2792,14 @@ async function generateBlurredThumbnail(item, blob) {
     return imageSourceToThumbnailBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height, true);
   } finally {
     if (!item.localUrl) URL.revokeObjectURL(url);
+  }
+}
+
+async function createOrientedImageBitmap(blob) {
+  try {
+    return await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  } catch {
+    return createImageBitmap(blob);
   }
 }
 

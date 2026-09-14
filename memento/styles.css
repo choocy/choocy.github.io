@@ -37,6 +37,7 @@ button, input, label { font: inherit; }
 button, label { cursor: pointer; }
 button:disabled { cursor: default; opacity: .38; }
 img, video { max-width: 100%; display: block; }
+img { image-orientation: from-image; }
 
 .topbar { position: sticky; top: 0; z-index: 10; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 clamp(18px, 5vw, 56px); background: color-mix(in srgb, var(--background), transparent 8%); border-bottom: 1px solid var(--line); backdrop-filter: blur(18px); }
 .brand-row { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
