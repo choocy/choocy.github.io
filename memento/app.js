@@ -1336,10 +1336,7 @@ function camera() {
         <button class="${state.mode === 'video' ? 'selected' : ''}" data-mode="video" type="button">Video</button>
       </div>
       <div class="zoom-strip" data-zoom-strip ${ended ? 'hidden' : ''}>
-        <button data-zoom-choice="0.5">0.5</button>
-        <button class="selected" data-zoom-choice="1">1</button>
-        <button data-zoom-choice="2">2</button>
-        <button data-zoom-choice="5">5</button>
+        <button data-zoom-pill type="button" aria-label="Camera zoom">1x</button>
       </div>
       <div class="camera-bottom" ${ended ? 'hidden' : ''}>
         ${FEATURES.albumImport ? `<button class="last-shot import-tile" data-open-album data-id="${memory.id}" type="button"><img alt=""><span></span></button>` : `<button class="last-shot import-tile" data-open-last-capture data-id="${memory.id}" type="button" aria-label="Open latest capture" disabled><img alt=""><span></span></button>`}
@@ -2153,6 +2150,9 @@ let streamHasAudio = false;
 let recordingCanvas = null;
 let recordingDrawFrame = 0;
 let photoCaptureInFlight = false;
+let zoomState = { supported: false, min: 1, max: 1, step: 0.1, current: 1 };
+let pendingZoom = null;
+let zoomFrame = 0;
 
 function startCamera() {
   const memory = currentMemory();
@@ -2317,16 +2317,120 @@ async function ensureVideoAudioStream(video, label) {
 function bindZoomIfSupported(stream) {
   const track = stream.getVideoTracks()[0];
   const capabilities = track?.getCapabilities?.();
-  document.querySelectorAll('[data-zoom-choice]').forEach((button) => {
-    const zoom = Number(button.dataset.zoomChoice);
-    const supported = capabilities?.zoom && zoom >= capabilities.zoom.min && zoom <= capabilities.zoom.max;
-    button.hidden = !supported;
-    button.addEventListener('click', () => {
-      document.querySelectorAll('[data-zoom-choice]').forEach((choice) => choice.classList.remove('selected'));
-      button.classList.add('selected');
-      track.applyConstraints({ advanced: [{ zoom }] }).catch(() => {});
-    });
+  const zoomCapability = capabilities?.zoom;
+  const strip = document.querySelector('[data-zoom-strip]');
+  const pill = document.querySelector('[data-zoom-pill]');
+  if (!strip || !pill) return;
+  if (!track || !zoomCapability) {
+    zoomState = { supported: false, min: 1, max: 1, step: 0.1, current: 1 };
+    strip.hidden = true;
+    return;
+  }
+  const settings = track.getSettings?.() || {};
+  zoomState = {
+    supported: true,
+    min: numberValue(zoomCapability.min, 1),
+    max: numberValue(zoomCapability.max, 1),
+    step: numberValue(zoomCapability.step, 0.1) || 0.1,
+    current: numberValue(settings.zoom, numberValue(zoomCapability.min, 1)),
+  };
+  zoomState.current = clampZoom(zoomState.current);
+  strip.hidden = zoomState.max <= zoomState.min;
+  updateZoomUi();
+  pill.onclick = () => applyCameraZoom(nextZoomStop());
+  bindCameraPinchZoom();
+}
+
+function bindCameraPinchZoom() {
+  const surface = document.querySelector('.camera');
+  if (!surface || surface.dataset.zoomGestureBound === 'true') return;
+  surface.dataset.zoomGestureBound = 'true';
+  const pointers = new Map();
+  let pinchStartDistance = 0;
+  let pinchStartZoom = 1;
+  surface.addEventListener('pointerdown', (event) => {
+    if (!zoomState.supported || event.pointerType === 'mouse') return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size === 2) {
+      const points = [...pointers.values()];
+      pinchStartDistance = pointerDistance(points[0], points[1]);
+      pinchStartZoom = zoomState.current;
+    }
   });
+  surface.addEventListener('pointermove', (event) => {
+    if (!zoomState.supported || !pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size !== 2 || !pinchStartDistance) return;
+    event.preventDefault();
+    const points = [...pointers.values()];
+    const distance = pointerDistance(points[0], points[1]);
+    queueCameraZoom(pinchStartZoom * (distance / pinchStartDistance));
+  }, { passive: false });
+  const clearPointer = (event) => {
+    pointers.delete(event.pointerId);
+    if (pointers.size < 2) pinchStartDistance = 0;
+  };
+  surface.addEventListener('pointerup', clearPointer);
+  surface.addEventListener('pointercancel', clearPointer);
+  surface.addEventListener('pointerleave', clearPointer);
+}
+
+function pointerDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function queueCameraZoom(value) {
+  pendingZoom = value;
+  if (zoomFrame) return;
+  zoomFrame = requestAnimationFrame(() => {
+    zoomFrame = 0;
+    const next = pendingZoom;
+    pendingZoom = null;
+    applyCameraZoom(next);
+  });
+}
+
+async function applyCameraZoom(value) {
+  if (!activeTrack || !zoomState.supported) return;
+  const zoom = clampZoom(value);
+  zoomState.current = zoom;
+  updateZoomUi();
+  try {
+    await activeTrack.applyConstraints({ advanced: [{ zoom }] });
+    const applied = activeTrack.getSettings?.().zoom;
+    if (Number.isFinite(applied)) {
+      zoomState.current = applied;
+      updateZoomUi();
+    }
+  } catch {
+    // Some browsers report zoom capability but reject rapid changes; leave the preview unchanged.
+  }
+}
+
+function clampZoom(value) {
+  const raw = Math.min(Math.max(numberValue(value, zoomState.current), zoomState.min), zoomState.max);
+  const steps = Math.round((raw - zoomState.min) / zoomState.step);
+  return Math.min(Math.max(zoomState.min + steps * zoomState.step, zoomState.min), zoomState.max);
+}
+
+function nextZoomStop() {
+  const baseStops = [zoomState.min, 1, 2, 3, 5, 10, zoomState.max]
+    .filter((value) => value >= zoomState.min && value <= zoomState.max);
+  const stops = [...new Set(baseStops.map((value) => Number(clampZoom(value).toFixed(3))))].sort((a, b) => a - b);
+  return stops.find((value) => value > zoomState.current + zoomState.step / 2) || stops[0] || zoomState.current;
+}
+
+function updateZoomUi() {
+  const strip = document.querySelector('[data-zoom-strip]');
+  const pill = document.querySelector('[data-zoom-pill]');
+  if (!strip || !pill) return;
+  strip.hidden = !zoomState.supported || zoomState.max <= zoomState.min;
+  pill.textContent = `${formatZoomValue(zoomState.current)}x`;
+  pill.setAttribute('aria-label', `Camera zoom ${formatZoomValue(zoomState.current)}x`);
+}
+
+function formatZoomValue(value) {
+  return numberValue(value, 1).toFixed(value >= 10 ? 0 : 1).replace(/\.0$/, '');
 }
 
 function bindFlashIfSupported() {
