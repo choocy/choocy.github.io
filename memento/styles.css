@@ -297,8 +297,6 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
   from { transform: translateX(0); }
   to { transform: translateX(100%); }
 }
-.viewer-warm { filter: contrast(1.04) saturate(1.08) sepia(.12) brightness(1.02); }
-.viewer-mono { filter: grayscale(1) contrast(1.08); }
 .viewer-tools { z-index: 81; display: flex; gap: 8px; overflow-x: auto; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); border-top: 1px solid rgb(255 255 255 / 12%); background: rgb(12 12 12 / 88%); backdrop-filter: blur(18px); }
 .viewer-tools button, .viewer-tools label { flex: 0 0 auto; min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 999px; background: rgb(255 255 255 / 8%); color: white; font-size: 13px; white-space: nowrap; }
 .viewer-tools button.selected { background: white; color: #111; }

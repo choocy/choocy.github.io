@@ -1277,9 +1277,6 @@ function viewer(memory) {
       <button class="viewer-nav viewer-next" data-viewer-step="1" aria-label="Next moment" ${nextIndex == null ? 'disabled' : ''}>${icon('chevron-right')}</button>
       ${item.locked ? '' : `<div class="viewer-tools">
         ${state.reactionsUnavailable ? '' : `<button data-open-reaction-picker="${item.id}" class="${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button"><span>${escapeHtml(state.mediaReactionMine.get(item.id) || 'React')}</span></button>`}
-        <button data-filter="${item.id}" data-filter-value="" type="button">Original</button>
-        <button data-filter="${item.id}" data-filter-value="viewer-warm" type="button">Warm</button>
-        <button data-filter="${item.id}" data-filter-value="viewer-mono" type="button">Mono</button>
       </div>`}
       ${!item.locked && (reaction.emoji || reaction.caption) ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
     </aside>`;
@@ -1533,11 +1530,6 @@ function bind() {
   document.querySelectorAll('[data-caption]').forEach((input) => input.addEventListener('change', () => {
     const current = state.reactions.get(input.dataset.caption) || {};
     state.reactions.set(input.dataset.caption, { ...current, caption: input.value.trim() });
-    render();
-  }));
-  document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
-    const current = state.reactions.get(button.dataset.filter) || {};
-    state.reactions.set(button.dataset.filter, { ...current, filter: button.dataset.filterValue });
     render();
   }));
   document.querySelectorAll('[data-join-form]').forEach((form) => form.addEventListener('submit', joinMemento));
