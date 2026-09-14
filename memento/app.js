@@ -1275,8 +1275,8 @@ function viewer(memory) {
       <button class="viewer-nav viewer-prev" data-viewer-step="-1" aria-label="Previous moment" ${previousIndex == null ? 'disabled' : ''}>${icon('chevron-left')}</button>
       <div class="viewer-media" data-viewer-swipe>${media}</div>
       <button class="viewer-nav viewer-next" data-viewer-step="1" aria-label="Next moment" ${nextIndex == null ? 'disabled' : ''}>${icon('chevron-right')}</button>
-      ${item.locked ? '' : `<div class="viewer-tools">
-        ${state.reactionsUnavailable ? '' : `<button data-open-reaction-picker="${item.id}" class="${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button"><span>${escapeHtml(state.mediaReactionMine.get(item.id) || 'React')}</span></button>`}
+      ${item.locked || state.reactionsUnavailable ? '' : `<div class="viewer-tools">
+        <button data-open-reaction-picker="${item.id}" class="viewer-react-button ${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button" aria-label="React">${state.mediaReactionMine.get(item.id) ? `<span>${escapeHtml(state.mediaReactionMine.get(item.id))}</span>` : icon('heart')}</button>
       </div>`}
       ${!item.locked && (reaction.emoji || reaction.caption) ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
     </aside>`;
@@ -2796,13 +2796,14 @@ async function createOrientedImageBitmap(blob) {
 }
 
 function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred = false) {
+  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight);
   const canvas = document.createElement('canvas');
   canvas.width = 240;
   canvas.height = 300;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas unavailable');
   if (blurred) context.filter = 'blur(10px) saturate(.82) brightness(.72)';
-  drawCover(context, source, sourceWidth, sourceHeight, canvas.width, canvas.height);
+  drawCover(context, oriented.source, oriented.width, oriented.height, canvas.width, canvas.height);
   return new Promise((resolve) => {
     if (canvas.toBlob) {
       canvas.toBlob((blob) => resolve(blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.62))), 'image/jpeg', 0.62);
@@ -2813,16 +2814,17 @@ function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred =
 }
 
 function imageSourceToDisplayBlob(source, sourceWidth, sourceHeight) {
+  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight);
   const maxEdge = 1600;
-  const scale = Math.min(1, maxEdge / Math.max(sourceWidth || maxEdge, sourceHeight || maxEdge));
-  const width = Math.max(1, Math.round((sourceWidth || maxEdge) * scale));
-  const height = Math.max(1, Math.round((sourceHeight || maxEdge) * scale));
+  const scale = Math.min(1, maxEdge / Math.max(oriented.width || maxEdge, oriented.height || maxEdge));
+  const width = Math.max(1, Math.round((oriented.width || maxEdge) * scale));
+  const height = Math.max(1, Math.round((oriented.height || maxEdge) * scale));
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas unavailable');
-  context.drawImage(source, 0, 0, width, height);
+  context.drawImage(oriented.source, 0, 0, width, height);
   return new Promise((resolve) => {
     if (canvas.toBlob) {
       canvas.toBlob((blob) => resolve(blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.78))), 'image/jpeg', 0.78);
@@ -2830,6 +2832,21 @@ function imageSourceToDisplayBlob(source, sourceWidth, sourceHeight) {
       resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.78)));
     }
   });
+}
+
+function portraitOrientedPhotoSource(source, sourceWidth, sourceHeight) {
+  const width = Number(sourceWidth) || source?.naturalWidth || source?.videoWidth || source?.width || 0;
+  const height = Number(sourceHeight) || source?.naturalHeight || source?.videoHeight || source?.height || 0;
+  if (!width || !height || width <= height) return { source, width, height };
+  const canvas = document.createElement('canvas');
+  canvas.width = height;
+  canvas.height = width;
+  const context = canvas.getContext('2d');
+  if (!context) return { source, width, height };
+  context.translate(height, 0);
+  context.rotate(Math.PI / 2);
+  context.drawImage(source, 0, 0, width, height);
+  return { source: canvas, width: canvas.width, height: canvas.height };
 }
 
 function loadImage(url) {

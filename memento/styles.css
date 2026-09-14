@@ -297,11 +297,14 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
   from { transform: translateX(0); }
   to { transform: translateX(100%); }
 }
-.viewer-tools { z-index: 81; display: flex; gap: 8px; overflow-x: auto; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); border-top: 1px solid rgb(255 255 255 / 12%); background: rgb(12 12 12 / 88%); backdrop-filter: blur(18px); }
-.viewer-tools button, .viewer-tools label { flex: 0 0 auto; min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 999px; background: rgb(255 255 255 / 8%); color: white; font-size: 13px; white-space: nowrap; }
+.viewer-tools { z-index: 81; display: flex; justify-content: center; gap: 8px; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); border-top: 1px solid rgb(255 255 255 / 12%); background: rgb(12 12 12 / 88%); backdrop-filter: blur(18px); }
+.viewer-tools button, .viewer-tools label { flex: 0 0 auto; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 999px; background: rgb(255 255 255 / 8%); color: white; font-size: 13px; white-space: nowrap; }
 .viewer-tools button.selected { background: white; color: #111; }
 .viewer-tools input { width: 70px; min-height: 0; height: 30px; padding: 0; border: 0; background: transparent; color: white; outline: none; }
 .viewer-tools .caption-field input { width: 150px; }
+.viewer-react-button { width: 48px; height: 48px; padding: 0; }
+.viewer-react-button svg { width: 22px; height: 22px; }
+.viewer-react-button span { font-size: 22px; line-height: 1; }
 .viewer-sticker { position: fixed; left: 50%; bottom: max(82px, calc(env(safe-area-inset-bottom) + 72px)); z-index: 82; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; max-width: min(86vw, 520px); padding: 9px 14px; border-radius: 999px; background: rgb(0 0 0 / 48%); color: white; backdrop-filter: blur(16px); }
 .viewer-sticker strong { font-size: 24px; line-height: 1; }
 .viewer-sticker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
