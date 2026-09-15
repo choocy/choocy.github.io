@@ -2452,11 +2452,11 @@ async function capturePhoto(video, style = 'Original') {
   if (activeTrack && typeof ImageCapture !== 'undefined' && filter === filters.Original) {
     try {
       const imageCapture = new ImageCapture(activeTrack);
-      const blob = await imageCapture.takePhoto();
-      const localBlob = await generateDisplayPhotoBlob({ type: 'photo' }, blob).catch(() => blob);
+      const rawBlob = await imageCapture.takePhoto();
+      const blob = await generateOriginalPhotoBlob({ type: 'photo' }, rawBlob).catch(() => rawBlob);
       return {
         blob,
-        localUrl: URL.createObjectURL(localBlob),
+        localUrl: URL.createObjectURL(blob),
       };
     } catch {
       try {
@@ -2476,13 +2476,14 @@ async function capturePhoto(video, style = 'Original') {
 
 async function canvasPhotoFromSource(source, width, height, style = 'Original') {
   const filter = filters[style] || filters.Original;
+  const oriented = portraitOrientedPhotoSource(source, width, height);
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = oriented.width;
+  canvas.height = oriented.height;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas unavailable');
   context.filter = filter;
-  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  context.drawImage(oriented.source, 0, 0, canvas.width, canvas.height);
   if (style === 'Mono') applyMonoPixels(context, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => {
     if (canvas.toBlob) {
@@ -2702,16 +2703,23 @@ async function uploadCapture(memory, item, blob, contentType) {
     markCapture(memory.id, item.id, 'Ended');
     throw new Error('Memento has ended');
   }
+  const uploadBlob = item.type === 'photo'
+    ? await generateOriginalPhotoBlob(item, blob).catch(() => blob)
+    : blob;
+  if (item.type === 'photo' && item.localUrl && uploadBlob !== blob) {
+    URL.revokeObjectURL(item.localUrl);
+    item.localUrl = URL.createObjectURL(uploadBlob);
+  }
   const uploadType = item.type === 'video' ? 'video/mp4' : normalizedContentType(contentType);
   const extension = uploadType.includes('video') ? videoExtension(uploadType) : 'jpg';
   const storagePath = `mementos/${memory.id}/media/${item.id}.${extension}`;
   const renderPath = item.type === 'photo' ? `mementos/${memory.id}/renders/${item.id}.jpg` : null;
   const thumbnailPath = `mementos/${memory.id}/thumbs/${item.id}.jpg`;
-  const thumbnailBlob = await generateBlurredThumbnail(item, blob).catch(() => null);
-  const renderBlob = item.type === 'photo' ? await generateDisplayPhotoBlob(item, blob).catch(() => null) : null;
+  const thumbnailBlob = await generateBlurredThumbnail(item, uploadBlob).catch(() => null);
+  const renderBlob = item.type === 'photo' ? await generateDisplayPhotoBlob(item, uploadBlob).catch(() => null) : null;
   let uploadedRenderPath = null;
   if (thumbnailBlob) await uploadStorageObject(thumbnailPath, thumbnailBlob, 'image/jpeg');
-  await uploadStorageObject(storagePath, blob, uploadType);
+  await uploadStorageObject(storagePath, uploadBlob, uploadType);
   if (renderBlob && renderPath) {
     try {
       await uploadStorageObject(renderPath, renderBlob, 'image/jpeg', supabase.rendersBucket);
@@ -2728,7 +2736,7 @@ async function uploadCapture(memory, item, blob, contentType) {
     render_path: uploadedRenderPath,
     thumbnail_path: thumbnailBlob ? thumbnailPath : null,
     captured_by_name: item.capturedByName || currentParticipantName(),
-    file_size_bytes: blob.size,
+    file_size_bytes: uploadBlob.size,
     duration_seconds: item.type === 'video' ? memory.videoLength : null,
     uploaded_at: new Date().toISOString(),
     approval_status: memory.sharedGallery ? 'approved' : 'pending',
@@ -2756,6 +2764,25 @@ async function generateDisplayPhotoBlob(item, blob) {
   try {
     const image = await loadImage(url);
     return imageSourceToDisplayBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height);
+  } finally {
+    if (!item.localUrl) URL.revokeObjectURL(url);
+  }
+}
+
+async function generateOriginalPhotoBlob(item, blob) {
+  if (item.type === 'video') return blob;
+  if ('createImageBitmap' in window) {
+    const bitmap = await createOrientedImageBitmap(blob);
+    try {
+      return imageSourceToOriginalBlob(bitmap, bitmap.width, bitmap.height);
+    } finally {
+      bitmap.close?.();
+    }
+  }
+  const url = item.localUrl || URL.createObjectURL(blob);
+  try {
+    const image = await loadImage(url);
+    return imageSourceToOriginalBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height);
   } finally {
     if (!item.localUrl) URL.revokeObjectURL(url);
   }
@@ -2793,6 +2820,23 @@ async function createOrientedImageBitmap(blob) {
   } catch {
     return createImageBitmap(blob);
   }
+}
+
+function imageSourceToOriginalBlob(source, sourceWidth, sourceHeight) {
+  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = oriented.width;
+  canvas.height = oriented.height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas unavailable');
+  context.drawImage(oriented.source, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve) => {
+    if (canvas.toBlob) {
+      canvas.toBlob((blob) => resolve(blob || dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9))), 'image/jpeg', 0.9);
+    } else {
+      resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9)));
+    }
+  });
 }
 
 function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred = false) {
