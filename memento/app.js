@@ -1273,11 +1273,11 @@ function viewer(memory) {
     <aside class="viewer" role="dialog" aria-modal="true">
       <button class="viewer-close" data-close-viewer aria-label="Close">${icon('close')}</button>
       <button class="viewer-nav viewer-prev" data-viewer-step="-1" aria-label="Previous moment" ${previousIndex == null ? 'disabled' : ''}>${icon('chevron-left')}</button>
-      <div class="viewer-media" data-viewer-swipe>${media}</div>
+      <div class="viewer-media" data-viewer-swipe>
+        ${media}
+        ${item.locked || state.reactionsUnavailable ? '' : `<button data-open-reaction-picker="${item.id}" class="viewer-react-button ${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button" aria-label="React">${state.mediaReactionMine.get(item.id) ? `<span>${escapeHtml(state.mediaReactionMine.get(item.id))}</span>` : icon('heart')}</button>`}
+      </div>
       <button class="viewer-nav viewer-next" data-viewer-step="1" aria-label="Next moment" ${nextIndex == null ? 'disabled' : ''}>${icon('chevron-right')}</button>
-      ${item.locked || state.reactionsUnavailable ? '' : `<div class="viewer-tools">
-        <button data-open-reaction-picker="${item.id}" class="viewer-react-button ${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button" aria-label="React">${state.mediaReactionMine.get(item.id) ? `<span>${escapeHtml(state.mediaReactionMine.get(item.id))}</span>` : icon('heart')}</button>
-      </div>`}
       ${!item.locked && (reaction.emoji || reaction.caption) ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
     </aside>`;
 }
@@ -2203,7 +2203,7 @@ function startCamera() {
     try {
       const photo = await capturePhoto(video, memory.style);
       photos = Math.max(0, photos - 1);
-      const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, capturedByName: currentParticipantName(), capturedAt: Date.now(), sync: 'Syncing' });
+      const item = addLocalCapture(memory.id, { id: crypto.randomUUID(), type: 'photo', localUrl: photo.localUrl, rotationDegrees: photo.rotationDegrees || 0, capturedByName: currentParticipantName(), capturedAt: Date.now(), sync: 'Syncing' });
       showLastShot(photo.localUrl, 'Syncing');
       updateRemaining(photos, state.mode);
       uploadCapture(memory, item, photo.blob, 'image/jpeg').catch((error) => handleUploadFailure(memory, item, error));
@@ -2448,21 +2448,23 @@ function toggleFlash() {
 
 async function capturePhoto(video, style = 'Original') {
   const filter = filters[style] || filters.Original;
+  const rotationDegrees = photoCaptureRotationDegrees();
   await ensureCameraReady(video);
   if (activeTrack && typeof ImageCapture !== 'undefined' && filter === filters.Original) {
     try {
       const imageCapture = new ImageCapture(activeTrack);
       const rawBlob = await imageCapture.takePhoto();
-      const blob = await generateOriginalPhotoBlob({ type: 'photo' }, rawBlob).catch(() => rawBlob);
+      const blob = await generateOriginalPhotoBlob({ type: 'photo', rotationDegrees }, rawBlob).catch(() => rawBlob);
       return {
         blob,
         localUrl: URL.createObjectURL(blob),
+        rotationDegrees,
       };
     } catch {
       try {
         const imageCapture = new ImageCapture(activeTrack);
         const bitmap = await imageCapture.grabFrame();
-        return canvasPhotoFromSource(bitmap, bitmap.width, bitmap.height, style);
+        return canvasPhotoFromSource(bitmap, bitmap.width, bitmap.height, style, rotationDegrees);
       } catch {
         // Canvas capture below works on browsers without ImageCapture support.
       }
@@ -2471,12 +2473,12 @@ async function capturePhoto(video, style = 'Original') {
   const settings = activeTrack?.getSettings?.() || {};
   const width = video.videoWidth || settings.width || 1280;
   const height = video.videoHeight || settings.height || 720;
-  return canvasPhotoFromSource(video, width, height, style);
+  return canvasPhotoFromSource(video, width, height, style, rotationDegrees);
 }
 
-async function canvasPhotoFromSource(source, width, height, style = 'Original') {
+async function canvasPhotoFromSource(source, width, height, style = 'Original', rotationDegrees = 0) {
   const filter = filters[style] || filters.Original;
-  const oriented = portraitOrientedPhotoSource(source, width, height);
+  const oriented = portraitOrientedPhotoSource(source, width, height, rotationDegrees);
   const canvas = document.createElement('canvas');
   canvas.width = oriented.width;
   canvas.height = oriented.height;
@@ -2496,7 +2498,17 @@ async function canvasPhotoFromSource(source, width, height, style = 'Original') 
   return {
     blob: fallbackBlob,
     localUrl: URL.createObjectURL(fallbackBlob),
+    rotationDegrees,
   };
+}
+
+function photoCaptureRotationDegrees() {
+  const raw = Number(screen.orientation?.angle ?? window.orientation ?? 0);
+  const angle = ((raw % 360) + 360) % 360;
+  if (angle === 90) return -90;
+  if (angle === 270) return 90;
+  if (angle === 180) return 180;
+  return 0;
 }
 
 function applyMonoPixels(context, width, height) {
@@ -2755,7 +2767,7 @@ async function generateDisplayPhotoBlob(item, blob) {
   if ('createImageBitmap' in window) {
     const bitmap = await createOrientedImageBitmap(blob);
     try {
-      return imageSourceToDisplayBlob(bitmap, bitmap.width, bitmap.height);
+      return imageSourceToDisplayBlob(bitmap, bitmap.width, bitmap.height, item.rotationDegrees || 0);
     } finally {
       bitmap.close?.();
     }
@@ -2763,7 +2775,7 @@ async function generateDisplayPhotoBlob(item, blob) {
   const url = item.localUrl || URL.createObjectURL(blob);
   try {
     const image = await loadImage(url);
-    return imageSourceToDisplayBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height);
+    return imageSourceToDisplayBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height, item.rotationDegrees || 0);
   } finally {
     if (!item.localUrl) URL.revokeObjectURL(url);
   }
@@ -2774,7 +2786,7 @@ async function generateOriginalPhotoBlob(item, blob) {
   if ('createImageBitmap' in window) {
     const bitmap = await createOrientedImageBitmap(blob);
     try {
-      return imageSourceToOriginalBlob(bitmap, bitmap.width, bitmap.height);
+      return imageSourceToOriginalBlob(bitmap, bitmap.width, bitmap.height, item.rotationDegrees || 0);
     } finally {
       bitmap.close?.();
     }
@@ -2782,7 +2794,7 @@ async function generateOriginalPhotoBlob(item, blob) {
   const url = item.localUrl || URL.createObjectURL(blob);
   try {
     const image = await loadImage(url);
-    return imageSourceToOriginalBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height);
+    return imageSourceToOriginalBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height, item.rotationDegrees || 0);
   } finally {
     if (!item.localUrl) URL.revokeObjectURL(url);
   }
@@ -2800,7 +2812,7 @@ async function generateBlurredThumbnail(item, blob) {
   if ('createImageBitmap' in window) {
     const bitmap = await createOrientedImageBitmap(blob);
     try {
-      return imageSourceToThumbnailBlob(bitmap, bitmap.width, bitmap.height, true);
+      return imageSourceToThumbnailBlob(bitmap, bitmap.width, bitmap.height, true, item.rotationDegrees || 0);
     } finally {
       bitmap.close?.();
     }
@@ -2808,7 +2820,7 @@ async function generateBlurredThumbnail(item, blob) {
   const url = item.localUrl || URL.createObjectURL(blob);
   try {
     const image = await loadImage(url);
-    return imageSourceToThumbnailBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height, true);
+    return imageSourceToThumbnailBlob(image, image.naturalWidth || image.width, image.naturalHeight || image.height, true, item.rotationDegrees || 0);
   } finally {
     if (!item.localUrl) URL.revokeObjectURL(url);
   }
@@ -2822,8 +2834,8 @@ async function createOrientedImageBitmap(blob) {
   }
 }
 
-function imageSourceToOriginalBlob(source, sourceWidth, sourceHeight) {
-  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight);
+function imageSourceToOriginalBlob(source, sourceWidth, sourceHeight, rotationDegrees = 0) {
+  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight, rotationDegrees);
   const canvas = document.createElement('canvas');
   canvas.width = oriented.width;
   canvas.height = oriented.height;
@@ -2839,8 +2851,8 @@ function imageSourceToOriginalBlob(source, sourceWidth, sourceHeight) {
   });
 }
 
-function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred = false) {
-  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight);
+function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred = false, rotationDegrees = 0) {
+  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight, rotationDegrees);
   const canvas = document.createElement('canvas');
   canvas.width = 240;
   canvas.height = 300;
@@ -2857,8 +2869,8 @@ function imageSourceToThumbnailBlob(source, sourceWidth, sourceHeight, blurred =
   });
 }
 
-function imageSourceToDisplayBlob(source, sourceWidth, sourceHeight) {
-  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight);
+function imageSourceToDisplayBlob(source, sourceWidth, sourceHeight, rotationDegrees = 0) {
+  const oriented = portraitOrientedPhotoSource(source, sourceWidth, sourceHeight, rotationDegrees);
   const maxEdge = 1600;
   const scale = Math.min(1, maxEdge / Math.max(oriented.width || maxEdge, oriented.height || maxEdge));
   const width = Math.max(1, Math.round((oriented.width || maxEdge) * scale));
@@ -2878,19 +2890,37 @@ function imageSourceToDisplayBlob(source, sourceWidth, sourceHeight) {
   });
 }
 
-function portraitOrientedPhotoSource(source, sourceWidth, sourceHeight) {
+function portraitOrientedPhotoSource(source, sourceWidth, sourceHeight, rotationDegrees = 0) {
   const width = Number(sourceWidth) || source?.naturalWidth || source?.videoWidth || source?.width || 0;
   const height = Number(sourceHeight) || source?.naturalHeight || source?.videoHeight || source?.height || 0;
-  if (!width || !height || width <= height) return { source, width, height };
+  const explicitRotation = normalizeRotationDegrees(rotationDegrees);
+  if (!width || !height || (!explicitRotation && width <= height)) return { source, width, height };
+  const rotation = explicitRotation || -90;
+  const swapsSides = Math.abs(rotation) === 90 || Math.abs(rotation) === 270;
   const canvas = document.createElement('canvas');
-  canvas.width = height;
-  canvas.height = width;
+  canvas.width = swapsSides ? height : width;
+  canvas.height = swapsSides ? width : height;
   const context = canvas.getContext('2d');
   if (!context) return { source, width, height };
-  context.translate(height, 0);
-  context.rotate(Math.PI / 2);
+  if (rotation === 90) {
+    context.translate(canvas.width, 0);
+  } else if (rotation === -90 || rotation === 270) {
+    context.translate(0, canvas.height);
+  } else if (Math.abs(rotation) === 180) {
+    context.translate(canvas.width, canvas.height);
+  }
+  context.rotate(rotation * Math.PI / 180);
   context.drawImage(source, 0, 0, width, height);
   return { source: canvas, width: canvas.width, height: canvas.height };
+}
+
+function normalizeRotationDegrees(value) {
+  const raw = Number(value) || 0;
+  const normalized = ((raw % 360) + 360) % 360;
+  if (normalized === 90) return 90;
+  if (normalized === 180) return 180;
+  if (normalized === 270) return -90;
+  return 0;
 }
 
 function loadImage(url) {
