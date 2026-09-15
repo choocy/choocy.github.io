@@ -1268,14 +1268,15 @@ function viewer(memory) {
   const outgoingMedia = outgoingItem && state.viewerDirection
     ? viewerMediaElement(outgoingItem, viewerMediaUrl(outgoingItem), outgoingReaction, outgoingClass, false, memory)
     : '';
-  const media = `${outgoingMedia}${viewerMediaElement(item, url, reaction, incomingClass, true, memory)}`;
+  const media = `${outgoingMedia}<div class="viewer-media-frame">${viewerMediaElement(item, url, reaction, incomingClass, true, memory)}
+    ${item.locked || state.reactionsUnavailable ? '' : `<button data-open-reaction-picker="${item.id}" class="viewer-react-button ${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button" aria-label="React">${state.mediaReactionMine.get(item.id) ? `<span>${escapeHtml(state.mediaReactionMine.get(item.id))}</span>` : icon('smile')}</button>`}
+  </div>`;
   return `
     <aside class="viewer" role="dialog" aria-modal="true">
       <button class="viewer-close" data-close-viewer aria-label="Close">${icon('close')}</button>
       <button class="viewer-nav viewer-prev" data-viewer-step="-1" aria-label="Previous moment" ${previousIndex == null ? 'disabled' : ''}>${icon('chevron-left')}</button>
       <div class="viewer-media" data-viewer-swipe>
         ${media}
-        ${item.locked || state.reactionsUnavailable ? '' : `<button data-open-reaction-picker="${item.id}" class="viewer-react-button ${state.mediaReactionMine.get(item.id) ? 'selected' : ''}" type="button" aria-label="React">${state.mediaReactionMine.get(item.id) ? `<span>${escapeHtml(state.mediaReactionMine.get(item.id))}</span>` : icon('heart')}</button>`}
       </div>
       <button class="viewer-nav viewer-next" data-viewer-step="1" aria-label="Next moment" ${nextIndex == null ? 'disabled' : ''}>${icon('chevron-right')}</button>
       ${!item.locked && (reaction.emoji || reaction.caption) ? `<div class="viewer-sticker"><strong>${escapeHtml(reaction.emoji || '')}</strong><span>${escapeHtml(reaction.caption || '')}</span></div>` : ''}
@@ -1400,6 +1401,7 @@ function icon(name) {
     flip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg>',
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>',
     heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>',
+    smile: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></svg>',
     sparkle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.9L20 11l-6.1 2.1L12 19l-1.9-5.9L4 11l6.1-2.1L12 3Z"/></svg>',
   };
   return icons[name] || '';
@@ -2505,8 +2507,8 @@ async function canvasPhotoFromSource(source, width, height, style = 'Original', 
 function photoCaptureRotationDegrees() {
   const raw = Number(screen.orientation?.angle ?? window.orientation ?? 0);
   const angle = ((raw % 360) + 360) % 360;
-  if (angle === 90) return -90;
-  if (angle === 270) return 90;
+  if (angle === 90) return 90;
+  if (angle === 270) return -90;
   if (angle === 180) return 180;
   return 0;
 }
