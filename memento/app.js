@@ -208,6 +208,7 @@ async function uploadStorageObject(path, blob, contentType, bucket = supabase.or
 
 async function loadMemories(options = {}) {
   const previousSignature = gallerySignature();
+  const previousMediaUrlCount = state.mediaUrls.size;
   preserveInviteInUrl();
   state.loading = true;
   state.error = '';
@@ -230,7 +231,7 @@ async function loadMemories(options = {}) {
     scheduleEventRefresh();
     scheduleGallerySync();
     scheduleReactionSync();
-    if (!options.renderOnlyWhenChanged || previousSignature !== gallerySignature()) render();
+    if (!options.renderOnlyWhenChanged || previousSignature !== gallerySignature() || state.mediaUrls.size !== previousMediaUrlCount) render();
   }
 }
 
@@ -712,6 +713,7 @@ function setView(next, id) {
   if (state.view === 'camera' && next !== 'camera') stopCamera();
   if (next === 'camera') {
     state.lastCaptureId = '';
+    requestPortraitOrientation();
     enterImmersiveMode();
   }
   state.guestMenuOpen = false;
@@ -890,6 +892,10 @@ function enterImmersiveMode() {
   const root = document.documentElement;
   if (document.fullscreenElement || !root.requestFullscreen) return;
   root.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}
+
+function requestPortraitOrientation() {
+  screen.orientation?.lock?.('portrait').catch(() => {});
 }
 
 function topbar() {
@@ -1485,6 +1491,7 @@ function bind() {
     render();
   });
   document.querySelectorAll('[data-open-media]').forEach((button) => button.addEventListener('click', () => {
+    requestPortraitOrientation();
     state.viewer = Number(button.dataset.openMedia);
     state.previousViewer = null;
     state.viewerDirection = 0;
