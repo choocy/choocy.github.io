@@ -356,19 +356,49 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
   html.camera-open,
   html.viewer-open { width: 100%; height: 100%; overflow: hidden; }
 
-  html.camera-open .camera,
-  html.viewer-open .viewer {
-    left: 0;
-    top: 0;
-    right: auto;
-    bottom: auto;
-    width: 100vh;
-    height: 100vw;
-    transform: rotate(90deg) translateY(-100%);
-    transform-origin: top left;
+  .camera-top {
+    top: max(6px, env(safe-area-inset-top));
+    grid-template-columns: 58px minmax(0, 1fr) 108px;
+    padding: 8px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   }
 
-  html.viewer-open .viewer { inset: auto; }
+  .camera-back { width: 48px; height: 48px; border-radius: 12px; }
+  .camera-title strong { max-width: min(42vw, 360px); font-size: 16px; }
+  .camera-title span { max-width: min(44vw, 380px); font-size: 12px; }
+  .remaining-counter strong { font-size: 32px; }
+  .remaining-counter span { width: 54px; font-size: 12px; }
+
+  .capture-mode {
+    left: max(18px, env(safe-area-inset-left));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    transform: none;
+  }
+
+  .zoom-strip {
+    left: 50%;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    width: auto;
+    transform: translateX(-50%);
+  }
+
+  .camera-bottom {
+    left: auto;
+    right: max(16px, env(safe-area-inset-right));
+    top: 50%;
+    bottom: auto;
+    width: 76px;
+    grid-template-columns: 1fr;
+    grid-template-rows: 58px 76px auto;
+    justify-items: center;
+    gap: 12px;
+    padding: 0;
+    transform: translateY(-50%);
+  }
+
+  .last-shot { width: 54px; height: 54px; }
+  .shutter { width: 68px; height: 68px; }
+  .tool-stack { gap: 10px; }
+  .tool-stack button { width: 42px; height: 42px; background: rgb(0 0 0 / 34%); }
 }
 @media (max-width: 720px) {
   .topbar { height: 58px; }
