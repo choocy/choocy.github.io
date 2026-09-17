@@ -1647,7 +1647,7 @@ function openLastCapture(memoryId) {
   if (state.view === 'camera') stopCamera();
   state.view = 'detail';
   state.selectedId = memory.id;
-  const items = [...(state.localCaptures.get(memory.id) || []), ...memory.media];
+  const items = galleryItems(memory);
   const index = items.findIndex((item) => item.id === state.lastCaptureId);
   state.viewer = index >= 0 ? index : null;
   state.previousViewer = null;
@@ -1657,8 +1657,9 @@ function openLastCapture(memoryId) {
 }
 
 function galleryItems(memory) {
+  const serverIds = new Set(memory.media.map((item) => item.id));
   const local = (state.localCaptures.get(memory.id) || [])
-    .filter((item) => item.sync !== 'Uploaded' && isMediaVisibleForMemory(item, memory));
+    .filter((item) => !serverIds.has(item.id) && isMediaVisibleForMemory(item, memory));
   return [...local, ...memory.media]
     .filter((item) => isMediaVisibleForMemory(item, memory))
     .sort(compareMediaNewestFirst);
@@ -2117,13 +2118,12 @@ function markCapture(memoryId, itemId, sync) {
   const list = state.localCaptures.get(memoryId) || [];
   if (sync === 'Uploaded') {
     updateLastShotStatus(sync);
-    if (state.view === 'camera') {
-      const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
-      state.localCaptures.set(memoryId, next);
-      updateCameraMode();
-    } else {
-      state.localCaptures.set(memoryId, list.filter((item) => item.id !== itemId));
-      loadMemories({ quiet: true });
+    const next = list.map((item) => item.id === itemId ? { ...item, sync } : item);
+    state.localCaptures.set(memoryId, next);
+    if (state.view === 'camera') updateCameraMode();
+    else {
+      render();
+      loadMemories({ quiet: true, renderOnlyWhenChanged: true });
     }
     return;
   }
@@ -2750,6 +2750,7 @@ async function uploadCapture(memory, item, blob, contentType) {
     }
   }
   await supabaseInsert('media_items?select=id', {
+    id: item.id,
     memento_id: memory.id,
     member_id: state.guest.memberId,
     media_type: item.type,
@@ -2759,9 +2760,17 @@ async function uploadCapture(memory, item, blob, contentType) {
     captured_by_name: item.capturedByName || currentParticipantName(),
     file_size_bytes: uploadBlob.size,
     duration_seconds: item.type === 'video' ? memory.videoLength : null,
+    taken_at: item.capturedAt ? new Date(item.capturedAt).toISOString() : new Date().toISOString(),
     uploaded_at: new Date().toISOString(),
     approval_status: memory.sharedGallery ? 'approved' : 'pending',
   });
+  item.path = item.type === 'photo' ? uploadedRenderPath || storagePath : thumbnailBlob ? thumbnailPath : '';
+  item.pathBucket = item.type === 'photo' && uploadedRenderPath ? supabase.rendersBucket : supabase.originalsBucket;
+  item.viewerPath = item.type === 'video' ? storagePath : item.path;
+  item.viewerBucket = item.type === 'photo' && uploadedRenderPath ? supabase.rendersBucket : supabase.originalsBucket;
+  item.originalPath = storagePath;
+  item.originalBucket = supabase.originalsBucket;
+  item.renderPath = uploadedRenderPath || '';
   if (item.type === 'photo') {
     memory.uploadedPhotos += 1;
     memory.ownUploadedPhotos += 1;
