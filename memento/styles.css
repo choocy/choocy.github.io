@@ -395,6 +395,16 @@ html.join-open:not(.viewport-settled) .join-hero { opacity: 0; }
     transform: translateY(-50%);
   }
 
+  html.camera-landscape-left .camera-bottom {
+    left: max(16px, env(safe-area-inset-left));
+    right: auto;
+  }
+
+  html.camera-landscape-left .capture-mode {
+    left: auto;
+    right: max(18px, env(safe-area-inset-right));
+  }
+
   .last-shot { width: 54px; height: 54px; }
   .shutter { width: 68px; height: 68px; }
   .tool-stack { gap: 10px; }

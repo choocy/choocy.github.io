@@ -819,6 +819,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function syncViewportHeight() {
+  syncCameraOrientationSide();
   const viewport = window.visualViewport;
   const height = Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
   const top = Math.round(viewport?.offsetTop || 0);
@@ -828,6 +829,15 @@ function syncViewportHeight() {
   viewportTop = top;
   document.documentElement.style.setProperty('--app-height', `${height}px`);
   document.documentElement.style.setProperty('--app-top', `${top}px`);
+}
+
+function syncCameraOrientationSide() {
+  const root = document.documentElement;
+  const rawAngle = Number(screen.orientation?.angle ?? window.orientation ?? 0);
+  const angle = ((rawAngle % 360) + 360) % 360;
+  const landscape = window.matchMedia?.('(orientation: landscape)').matches || window.innerWidth > window.innerHeight;
+  root.classList.toggle('camera-landscape-right', landscape && angle === 90);
+  root.classList.toggle('camera-landscape-left', landscape && angle === 270);
 }
 
 function stabilizeJoinViewport() {
@@ -875,8 +885,10 @@ function stabilizeCameraViewport() {
 
 window.addEventListener('resize', syncViewportHeight);
 window.addEventListener('orientationchange', () => {
+  syncCameraOrientationSide();
   stabilizeJoinViewport();
   stabilizeCameraViewport();
+  [40, 160, 420].forEach((delay) => window.setTimeout(syncCameraOrientationSide, delay));
 });
 window.addEventListener('pageshow', () => {
   stabilizeJoinViewport();
