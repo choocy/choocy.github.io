@@ -2479,7 +2479,8 @@ async function capturePhoto(video, style = 'Original') {
       return {
         blob,
         localUrl: URL.createObjectURL(blob),
-        rotationDegrees,
+        // The returned JPEG pixels are already normalized; upload derivatives must not rotate them again.
+        rotationDegrees: 0,
       };
     } catch {
       try {
@@ -2519,7 +2520,8 @@ async function canvasPhotoFromSource(source, width, height, style = 'Original', 
   return {
     blob: fallbackBlob,
     localUrl: URL.createObjectURL(fallbackBlob),
-    rotationDegrees,
+    // Canvas output has already applied the detected camera orientation.
+    rotationDegrees: 0,
   };
 }
 
@@ -2924,7 +2926,8 @@ function portraitOrientedPhotoSource(source, sourceWidth, sourceHeight, rotation
   const width = Number(sourceWidth) || source?.naturalWidth || source?.videoWidth || source?.width || 0;
   const height = Number(sourceHeight) || source?.naturalHeight || source?.videoHeight || source?.height || 0;
   const explicitRotation = normalizeRotationDegrees(rotationDegrees);
-  if (!width || !height || (!explicitRotation && width <= height)) return { source, width, height };
+  // EXIF-aware decoders may already return portrait pixels even while the screen reports landscape.
+  if (!width || !height || width <= height) return { source, width, height };
   const rotation = explicitRotation || -90;
   const swapsSides = Math.abs(rotation) === 90 || Math.abs(rotation) === 270;
   const canvas = document.createElement('canvas');
