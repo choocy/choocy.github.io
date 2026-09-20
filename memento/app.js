@@ -969,7 +969,7 @@ function invite() {
         </div>
         <p class="invite-note">Open in the app when installed, or continue here in your browser.</p>
         <div class="powered-row">
-          <span class="app-mark">*</span>
+          <img class="app-mark" src="./assets/memento-icon-192.png" alt="Memento">
           <span><small>Powered by</small><strong>Memento</strong></span>
           <span class="store-link">App Store ></span>
         </div>
@@ -991,7 +991,7 @@ function loading() {
 function appBanner() {
   return `
     <aside class="app-banner">
-      <span class="app-icon">*</span>
+      <img class="app-icon" src="./assets/memento-icon-192.png" alt="Memento">
       <span><small>Powered by</small><strong>Memento</strong><em>Guest camera for your event</em></span>
       <a href="#" aria-label="Open Memento in the App Store">App Store ></a>
     </aside>`;
@@ -2479,8 +2479,7 @@ async function capturePhoto(video, style = 'Original') {
       return {
         blob,
         localUrl: URL.createObjectURL(blob),
-        // The returned JPEG pixels are already normalized; upload derivatives must not rotate them again.
-        rotationDegrees: 0,
+        rotationDegrees,
       };
     } catch {
       try {
@@ -2520,8 +2519,7 @@ async function canvasPhotoFromSource(source, width, height, style = 'Original', 
   return {
     blob: fallbackBlob,
     localUrl: URL.createObjectURL(fallbackBlob),
-    // Canvas output has already applied the detected camera orientation.
-    rotationDegrees: 0,
+    rotationDegrees,
   };
 }
 
@@ -2926,8 +2924,7 @@ function portraitOrientedPhotoSource(source, sourceWidth, sourceHeight, rotation
   const width = Number(sourceWidth) || source?.naturalWidth || source?.videoWidth || source?.width || 0;
   const height = Number(sourceHeight) || source?.naturalHeight || source?.videoHeight || source?.height || 0;
   const explicitRotation = normalizeRotationDegrees(rotationDegrees);
-  // EXIF-aware decoders may already return portrait pixels even while the screen reports landscape.
-  if (!width || !height || width <= height) return { source, width, height };
+  if (!width || !height || (!explicitRotation && width <= height)) return { source, width, height };
   const rotation = explicitRotation || -90;
   const swapsSides = Math.abs(rotation) === 90 || Math.abs(rotation) === 270;
   const canvas = document.createElement('canvas');
